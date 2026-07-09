@@ -41,6 +41,9 @@ function App() {
   const [saveSequence, setSaveSequence] = useState('')
   const [loadingSaveSequence, setLoadingSaveSequence] = useState(false)
   const [exportingPdf, setExportingPdf] = useState(false)
+  const [error, setError] = useState('')
+  const [objSummaryCache, setObjSummaryCache] = useState<Record<string, any>>({})
+  const [fieldsCache, setFieldsCache] = useState<Record<string, any[]>>({})
   const [omniComponents, setOmniComponents] = useState<any>(null)
   const [loadingOmni, setLoadingOmni] = useState(false)
   const [omniExplanation, setOmniExplanation] = useState('')
@@ -59,11 +62,24 @@ function App() {
     })
   }, [])
 
+  const handleTokenExpired = () => {
+    chrome.storage.local.remove(['accessToken'])
+    setAccessToken('')
+    setConnected(false)
+    setObjects([])
+    alert('Your Salesforce session has expired. Please reconnect.')
+  }
+
   useEffect(() => {
     if (connected && instanceUrl && accessToken) {
       setLoading(true)
       fetchObjects(instanceUrl, accessToken)
-        .then(setObjects).catch(console.error).finally(() => setLoading(false))
+        .then(setObjects)
+        .catch(err => {
+          if (err.message === 'TOKEN_EXPIRED') handleTokenExpired()
+          else setError('Failed to load objects. Try reconnecting.')
+        })
+        .finally(() => setLoading(false))
     }
   }, [connected, instanceUrl, accessToken])
 
@@ -88,15 +104,28 @@ function App() {
     setComponentExplanation('')
     setView('object-doc')
     
-    // Load fields and object summary in parallel
-    setLoadingFields(true)
-    setLoadingObjSummary(true)
-    
-    fetchObjectDetail(instanceUrl, accessToken, obj.name)
-      .then(d => setFields(d.fields)).catch(console.error).finally(() => setLoadingFields(false))
-    
-    fetchObjectSummary(instanceUrl, accessToken, obj.name)
-      .then(setObjSummary).catch(console.error).finally(() => setLoadingObjSummary(false))
+    // Load fields and object summary - use cache if available
+    if (fieldsCache[obj.name]) {
+      setFields(fieldsCache[obj.name])
+      setLoadingFields(false)
+    } else {
+      setLoadingFields(true)
+      fetchObjectDetail(instanceUrl, accessToken, obj.name)
+        .then(d => { setFields(d.fields); setFieldsCache(prev => ({ ...prev, [obj.name]: d.fields })) })
+        .catch(err => { if (err.message === 'TOKEN_EXPIRED') handleTokenExpired() })
+        .finally(() => setLoadingFields(false))
+    }
+
+    if (objSummaryCache[obj.name]) {
+      setObjSummary(objSummaryCache[obj.name])
+      setLoadingObjSummary(false)
+    } else {
+      setLoadingObjSummary(true)
+      fetchObjectSummary(instanceUrl, accessToken, obj.name)
+        .then(summary => { setObjSummary(summary); setObjSummaryCache(prev => ({ ...prev, [obj.name]: summary })) })
+        .catch(err => { if (err.message === 'TOKEN_EXPIRED') handleTokenExpired() })
+        .finally(() => setLoadingObjSummary(false))
+    }
   }
 
   const handleSelectField = (field: SFField) => {
@@ -585,7 +614,10 @@ Object stats:
                   style={{ width: '100%', padding: '7px 10px', background: '#1a2332', border: '1px solid #30363d', borderRadius: '8px', color: '#ffffff', fontSize: '12px', boxSizing: 'border-box', outline: 'none' }} />
               </div>
               {loadingFields ? (
-                <div style={{ textAlign: 'center', padding: '40px', color: '#8b949e' }}>Loading fields...</div>
+                <div style={{ textAlign: 'center', padding: '40px', color: '#8b949e' }}>
+                  <div style={{ fontSize: '16px', marginBottom: '8px' }}>📋</div>
+                  <div style={{ fontSize: '12px' }}>Loading fields...</div>
+                </div>
               ) : (
                 filteredFields.map(field => (
                   <div key={field.name} onClick={() => handleSelectField(field)} style={{ padding: '8px 12px', borderRadius: '6px', marginBottom: '3px', background: '#161b22', border: '1px solid #21262d', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
@@ -782,9 +814,19 @@ Object stats:
           ))}
         </div>
       </div>
+      {error && (
+        <div style={{ padding: '10px 16px', background: '#cf222e22', border: '1px solid #cf222e44', margin: '8px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: '11px', color: '#cf222e' }}>⚠️ {error}</span>
+          <button onClick={() => setError('')} style={{ background: 'none', border: 'none', color: '#cf222e', cursor: 'pointer', fontSize: '14px' }}>×</button>
+        </div>
+      )}
       <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '40px', color: '#8b949e' }}>Loading objects...</div>
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#8b949e' }}>
+            <div style={{ fontSize: '28px', marginBottom: '12px' }}>⚡</div>
+            <div style={{ fontSize: '13px', fontWeight: '600', marginBottom: '4px' }}>Loading objects...</div>
+            <div style={{ fontSize: '11px', color: '#484f58' }}>Fetching from Salesforce</div>
+          </div>
         ) : (
           filteredObjects.map(obj => (
             <div key={obj.name} onClick={() => handleSelectObject(obj)} style={{ padding: '10px 12px', borderRadius: '8px', marginBottom: '4px', cursor: 'pointer', background: '#161b22', border: '1px solid #21262d', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
