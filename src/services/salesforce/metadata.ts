@@ -410,18 +410,25 @@ Flow Elements:
 - Subflows (${subflows.length}): ${subflows.map((s:any) => `"${s.label}" calls ${s.flowName}`).join(', ') || 'None'}
 - Variables (${variables.length}): ${variables.slice(0,10).map((v:any) => `${v.name}(${v.dataType}${v.isInput?',input':''}${v.isOutput?',output':''})`).join(', ') || 'None'}
 
-Please provide:
-1. **Purpose** - What this Flow does in 2-3 sentences
-2. **Trigger** - What triggers this flow? When does it run?
-3. **Step-by-Step Logic** - Walk through each action and decision in order
-4. **Actions Detail** - For each action, what does it do specifically?
-5. **Variables** - What data does this flow work with?
-6. **Decision Points** - What conditions/branches exist?
-7. **Dependencies** - What objects/fields/other flows must exist?
-8. **Risk** - What breaks if this flow is deactivated or modified?
-9. **Developer Notes** - Key things to know before modifying
+Write these sections. Be specific, use actual names from metadata above. Skip generic advice.
 
-Be specific. Reference actual element names. If this flow has Status=Obsolete, mention it's inactive.`
+**1. Purpose** - 2 sentences max. Include active/inactive status.
+
+**2. Trigger** - 1 sentence. Exactly what fires it.
+
+**3. Complete Execution Path** - Number every single step:
+1. [element]: what it does exactly
+2. [decision]: IF [actual condition] THEN [branch A] ELSE [branch B]  
+3. [action]: what it does, inputs used
+Show ALL branches. Show path to END.
+
+**4. Variables** - Each variable: name, type, what it holds, where set, where used
+
+**5. Dependencies** - Objects, fields, templates required
+
+**6. Risk** - 3 bullet points: what breaks if deactivated
+
+**7. Dev Tips** - 3 bullet points max`
 
   return new Promise((resolve, reject) => {
     chrome.runtime.sendMessage(

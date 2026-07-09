@@ -380,7 +380,7 @@ Object stats:
             <div style={{ fontSize: '11px', color: typeColor }}>{selectedComponent.type}</div>
           </div>
         </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '12px' }}>
           {loadingComponent ? (
             <div style={{ textAlign: 'center', padding: '40px' }}>
               <div style={{ fontSize: '24px', marginBottom: '12px' }}>✨</div>
@@ -390,7 +390,7 @@ Object stats:
           ) : componentExplanation ? (
             <div style={{ padding: '12px', background: '#161b22', borderRadius: '8px', border: `1px solid ${typeColor}44` }}>
               <div style={{ fontSize: '11px', color: typeColor, fontWeight: '700', marginBottom: '8px' }}>✨ AI CODE ANALYSIS</div>
-              <div style={{ fontSize: '12px', lineHeight: '1.7', color: '#e6edf3', whiteSpace: 'pre-wrap' }}>{componentExplanation}</div>
+              <div style={{ fontSize: '12px', lineHeight: '1.7', color: '#e6edf3', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{componentExplanation}</div>
             </div>
           ) : (
             <div style={{ textAlign: 'center', padding: '40px', color: '#8b949e', fontSize: '12px' }}>
