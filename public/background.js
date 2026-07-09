@@ -122,7 +122,7 @@ async function handleMessage(message) {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 500,
+        max_tokens: 6000,
         messages: [{ role: 'user', content: prompt }]
       })
     });

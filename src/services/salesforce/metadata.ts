@@ -336,7 +336,6 @@ export async function explainApexClass(
   body: string,
   apiKey: string
 ): Promise<string> {
-  const truncatedBody = body.length > 3000 ? body.substring(0, 3000) + '\n... (truncated)' : body
   
   const prompt = `You are a Salesforce expert. Analyze this Apex class and provide detailed documentation.
 
@@ -344,19 +343,27 @@ Class Name: ${className}
 
 Apex Code:
 \`\`\`apex
-${truncatedBody}
-\`\`\`
+${body}
+Answer in this exact format. Be brief but specific. Reference actual names from code.
 
-Please provide:
-1. **Purpose** - What this class does in 2-3 sentences
-2. **Type** - Is it a trigger handler, batch class, scheduler, utility, controller, etc?
-3. **Key Methods** - List each method with what it does
-4. **Fields Used** - Which Salesforce fields does it read/write?
-5. **SOQL Queries** - What data does it query?
-6. **DML Operations** - What records does it insert/update/delete?
-7. **Dependencies** - What other classes/objects does it depend on?
-8. **Risk Areas** - What could break if this class is modified?
-9. **For New Developers** - Key things to know before touching this code
+**PURPOSE:** [2 sentences. What it does and when it runs.]
+
+**METHODS:**
+[Each method: name(params) - what it does in 1-2 sentences]
+
+**DATA FLOW:**
+- Reads: [object.field list]
+- Writes: [object.field list]
+- SOQL: [what queries run]
+- DML: [insert/update/delete on which objects]
+
+**BUSINESS LOGIC:** [Key rules. Bullet points.]
+
+**DEPENDENCIES:** [Other classes, objects, fields required]
+
+**RISKS:** [3 bullets max]
+
+**DEV TIPS:** [3 bullets max]
 
 Be specific and technical. Reference actual method names and field names from the code.`
 

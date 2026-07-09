@@ -32,6 +32,7 @@ function App() {
   const [loadingAi, setLoadingAi] = useState(false)
   const [apiKey, setApiKey] = useState('')
   const [showApiKey, setShowApiKey] = useState(false)
+  const [pendingComponent, setPendingComponent] = useState<{name:string, type:string} | null>(null)
   const [activeTab, setActiveTab] = useState<'overview'|'fields'|'save-sequence'>('overview')
   const [selectedComponent, setSelectedComponent] = useState<{name:string, type:string} | null>(null)
   const [saveSequence, setSaveSequence] = useState('')
@@ -101,7 +102,7 @@ function App() {
   }
 
   const handleComponentClick = async (name: string, type: string) => {
-    if (!apiKey) { setShowApiKey(true); return }
+    if (!apiKey) { setPendingComponent({name, type}); setShowApiKey(true); return }
     setSelectedComponent({ name, type })
     setComponentExplanation('')
     setLoadingComponent(true)
@@ -316,7 +317,7 @@ Object stats:
                   <div style={{ fontSize: '11px', color: '#8b949e', marginBottom: '6px' }}>Enter your Anthropic API key</div>
                   <input value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="sk-ant-..." type="password"
                     style={{ width: '100%', padding: '7px 10px', background: '#0d1117', border: '1px solid #30363d', borderRadius: '6px', color: '#fff', fontSize: '12px', boxSizing: 'border-box', outline: 'none', marginBottom: '8px' }} />
-                  <button onClick={() => handleAiExplain()} disabled={!apiKey} style={{ width: '100%', padding: '8px', borderRadius: '6px', background: apiKey ? 'linear-gradient(135deg, #6e40c9, #1f6feb)' : '#21262d', color: '#fff', border: 'none', cursor: apiKey ? 'pointer' : 'not-allowed', fontSize: '12px', fontWeight: '600' }}>
+                  <button onClick={() => { if (pendingComponent) { setShowApiKey(false); handleComponentClick(pendingComponent.name, pendingComponent.type); setPendingComponent(null) } else { handleAiExplain() } }} disabled={!apiKey} style={{ width: '100%', padding: '8px', borderRadius: '6px', background: apiKey ? 'linear-gradient(135deg, #6e40c9, #1f6feb)' : '#21262d', color: '#fff', border: 'none', cursor: apiKey ? 'pointer' : 'not-allowed', fontSize: '12px', fontWeight: '600' }}>
                     ✨ Analyze
                   </button>
                 </div>
@@ -461,7 +462,7 @@ Object stats:
                   <div style={{ fontSize: '11px', color: '#8b949e', marginBottom: '6px' }}>Enter your Anthropic API key</div>
                   <input value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="sk-ant-..." type="password"
                     style={{ width: '100%', padding: '7px 10px', background: '#0d1117', border: '1px solid #30363d', borderRadius: '6px', color: '#fff', fontSize: '12px', boxSizing: 'border-box', outline: 'none', marginBottom: '8px' }} />
-                  <button onClick={() => handleAiExplain('object')} disabled={!apiKey} style={{ width: '100%', padding: '8px', borderRadius: '6px', background: apiKey ? 'linear-gradient(135deg, #6e40c9, #1f6feb)' : '#21262d', color: '#fff', border: 'none', cursor: apiKey ? 'pointer' : 'not-allowed', fontSize: '12px', fontWeight: '600' }}>
+                  <button onClick={() => { if (pendingComponent) { setShowApiKey(false); handleComponentClick(pendingComponent.name, pendingComponent.type); setPendingComponent(null) } else { handleAiExplain('object') } }} disabled={!apiKey} style={{ width: '100%', padding: '8px', borderRadius: '6px', background: apiKey ? 'linear-gradient(135deg, #6e40c9, #1f6feb)' : '#21262d', color: '#fff', border: 'none', cursor: apiKey ? 'pointer' : 'not-allowed', fontSize: '12px', fontWeight: '600' }}>
                     ✨ Analyze
                   </button>
                 </div>
