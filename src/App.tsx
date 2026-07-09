@@ -53,12 +53,23 @@ function App() {
 
   useEffect(() => {
     chrome.storage.local.get(['accessToken', 'instanceUrl', 'anthropicKey'], (result) => {
-      if (result.accessToken && result.instanceUrl) {
-        setConnected(true)
-        setInstanceUrl(result.instanceUrl as string)
-        setAccessToken(result.accessToken as string)
-      }
       if (result.anthropicKey) setApiKey(result.anthropicKey as string)
+      if (result.accessToken && result.instanceUrl) {
+        // Validate token via background worker
+        chrome.runtime.sendMessage(
+          { type: 'VALIDATE_TOKEN', instanceUrl: result.instanceUrl, accessToken: result.accessToken },
+          (response) => {
+            if (response?.valid) {
+              setConnected(true)
+              setInstanceUrl(result.instanceUrl as string)
+              setAccessToken(result.accessToken as string)
+            } else {
+              chrome.storage.local.remove(['accessToken'])
+              console.log('Token expired, cleared')
+            }
+          }
+        )
+      }
     })
   }, [])
 

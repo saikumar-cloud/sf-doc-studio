@@ -97,6 +97,19 @@ async function handleMessage(message) {
     return handleFlowMetadata(instanceUrl, accessToken, flowId, flowInfo);
   }
 
+  if (message.type === 'VALIDATE_TOKEN') {
+    const { instanceUrl, accessToken } = message;
+    try {
+      const r = await fetch(instanceUrl + '/services/data/v62.0/sobjects/', {
+        headers: { Authorization: 'Bearer ' + accessToken }
+      });
+      sendResponse({ valid: r.ok });
+    } catch(e) {
+      sendResponse({ valid: false });
+    }
+    return true;
+  }
+
   if (message.type === 'FETCH_REST') {
     const { instanceUrl, accessToken, path } = message;
     const r = await fetch(`${instanceUrl}${path}`, {
