@@ -1,32 +1,23 @@
-# React + TypeScript + Vite
+# SF Doc Studio
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+AI-powered Salesforce documentation and impact analyzer Chrome Extension.
 
-Currently, two official plugins are available:
+## Features
+- Object browser with Custom/Package/Standard filters
+- Deep AI analysis of Apex Classes, Flows, Validation Rules, Triggers
+- Save Sequence Visualizer
+- Impact Analyzer with risk scoring
+- Export to PDF
+- OmniStudio support
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Installation
+1. Clone: git clone https://github.com/saikumar-cloud/sf-doc-studio.git
+2. npm install && npm run build
+3. chrome://extensions -> Load unpacked -> select dist folder
 
-## React Compiler
+## Requirements
+- Salesforce org access
+- Anthropic API key (console.anthropic.com)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
-```
-
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## License
+MIT - Built by Sai Kumar Pallerla
