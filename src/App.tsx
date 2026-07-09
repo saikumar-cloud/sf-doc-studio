@@ -8,7 +8,7 @@ import {
   type SFObject, type SFField, type DependencySummary, type ObjectSummary
 } from './services/salesforce/metadata'
 
-type View = 'objects' | 'object-doc' | 'fields' | 'impact'
+type View = 'objects' | 'object-doc' | 'fields' | 'impact' | 'settings'
 
 function App() {
   const [connecting, setConnecting] = useState(false)
@@ -580,15 +580,80 @@ Object stats:
     )
   }
 
+  // Settings View
+  if (view === 'settings') {
+    return (
+      <div style={containerStyle}>
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid #21262d', display: 'flex', alignItems: 'center', gap: '10px', background: '#0d1117' }}>
+          <button onClick={() => setView('objects')} style={{ background: 'none', border: 'none', color: '#8b949e', cursor: 'pointer', fontSize: '18px', padding: '0' }}>←</button>
+          <div style={{ fontSize: '14px', fontWeight: '700' }}>Settings</div>
+        </div>
+        <div style={{ flex: 1, padding: '16px', overflowY: 'auto' }}>
+          
+          {/* API Key */}
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{ fontSize: '12px', fontWeight: '700', color: '#8b949e', marginBottom: '8px' }}>ANTHROPIC API KEY</div>
+            <div style={{ fontSize: '11px', color: '#484f58', marginBottom: '8px' }}>Required for AI explanations. Get yours at console.anthropic.com</div>
+            <input
+              value={apiKey}
+              onChange={e => setApiKey(e.target.value)}
+              placeholder="sk-ant-..."
+              type="password"
+              style={{ width: '100%', padding: '10px 12px', background: '#1a2332', border: '1px solid #30363d', borderRadius: '8px', color: '#fff', fontSize: '13px', boxSizing: 'border-box', outline: 'none', marginBottom: '8px' }}
+            />
+            <button onClick={() => {
+              chrome.storage.local.set({ anthropicKey: apiKey })
+              alert('API key saved!')
+            }} style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'linear-gradient(135deg, #6e40c9, #1f6feb)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>
+              💾 Save API Key
+            </button>
+            {apiKey && <div style={{ fontSize: '11px', color: '#238636', marginTop: '6px' }}>✅ API key is set</div>}
+          </div>
+
+          {/* Connection */}
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{ fontSize: '12px', fontWeight: '700', color: '#8b949e', marginBottom: '8px' }}>SALESFORCE CONNECTION</div>
+            <div style={{ padding: '12px', background: '#161b22', borderRadius: '8px', border: '1px solid #21262d', marginBottom: '8px' }}>
+              <div style={{ fontSize: '11px', color: '#8b949e', marginBottom: '4px' }}>Connected org</div>
+              <div style={{ fontSize: '12px', color: '#00c851', wordBreak: 'break-all' }}>{instanceUrl || 'Not connected'}</div>
+            </div>
+            <button onClick={() => {
+              chrome.storage.local.clear()
+              setConnected(false)
+              setAccessToken('')
+              setInstanceUrl('')
+              setApiKey('')
+              setView('objects')
+            }} style={{ width: '100%', padding: '10px', borderRadius: '8px', background: '#21262d', color: '#cf222e', border: '1px solid #cf222e44', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>
+              🔌 Disconnect & Clear All Data
+            </button>
+          </div>
+
+          {/* About */}
+          <div>
+            <div style={{ fontSize: '12px', fontWeight: '700', color: '#8b949e', marginBottom: '8px' }}>ABOUT</div>
+            <div style={{ padding: '12px', background: '#161b22', borderRadius: '8px', border: '1px solid #21262d' }}>
+              <div style={{ fontSize: '13px', fontWeight: '600', marginBottom: '4px' }}>⚡ SF Doc Studio</div>
+              <div style={{ fontSize: '11px', color: '#8b949e', marginBottom: '2px' }}>Version 0.1.0</div>
+              <div style={{ fontSize: '11px', color: '#8b949e' }}>AI-powered Salesforce documentation & impact analysis</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    )
+  }
+
   // Objects List View
   return (
     <div style={containerStyle}>
       <div style={{ padding: '16px 20px', borderBottom: '1px solid #21262d', display: 'flex', alignItems: 'center', gap: '10px' }}>
         <span style={{ fontSize: '20px' }}>⚡</span>
-        <div>
+        <div style={{ flex: 1 }}>
           <div style={{ fontSize: '13px', fontWeight: '700' }}>SF Doc Studio</div>
           <div style={{ fontSize: '11px', color: '#00c851' }}>● Connected</div>
         </div>
+        <button onClick={() => setView('settings')} style={{ background: 'none', border: 'none', color: '#8b949e', cursor: 'pointer', fontSize: '18px', padding: '0' }}>⚙️</button>
       </div>
       <div style={{ padding: '10px 16px', borderBottom: '1px solid #21262d' }}>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search objects..."
