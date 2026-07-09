@@ -620,6 +620,46 @@ Be specific with actual component names.`
   })
 }
 
+
+export async function fetchOmniStudioComponents(
+  instanceUrl: string,
+  accessToken: string
+): Promise<{ omniScripts: any[], dataRaptors: any[], integrationProcedures: any[], flexCards: any[] }> {
+  const safe = (p: Promise<any[]>) => p.catch(() => [])
+  const [omniScripts, dataRaptors, integrationProcedures, flexCards] = await Promise.all([
+    safe(toolingQueryViaBackground(instanceUrl, accessToken,
+      `SELECT Id, Name, Type__c, SubType__c, Language__c, IsActive__c FROM OmniScript__c WHERE IsActive__c=true LIMIT 50`)),
+    safe(toolingQueryViaBackground(instanceUrl, accessToken,
+      `SELECT Id, Name, InterfaceType__c FROM DRBundle__c LIMIT 50`)),
+    safe(toolingQueryViaBackground(instanceUrl, accessToken,
+      `SELECT Id, Name, Type__c, IsActive__c FROM OmniProcess__c WHERE Type__c='IntegrationProcedure' AND IsActive__c=true LIMIT 50`)),
+    safe(toolingQueryViaBackground(instanceUrl, accessToken,
+      `SELECT Id, Name, IsActive__c FROM OmniUiCard__c WHERE IsActive__c=true LIMIT 50`))
+  ])
+  console.log('OmniStudio:', omniScripts.length, 'scripts,', dataRaptors.length, 'DRs,', integrationProcedures.length, 'IPs,', flexCards.length, 'cards')
+  return { omniScripts, dataRaptors, integrationProcedures, flexCards }
+}
+
+export async function explainOmniComponent(
+  componentType: string,
+  componentName: string,
+  componentData: any,
+  apiKey: string
+): Promise<string> {
+  const prompt = "You are a Salesforce OmniStudio expert. Analyze this " + componentType + " named " + componentName + ". Data: " + JSON.stringify(componentData).substring(0, 1000) + ". Write: **PURPOSE:** what it does. **TYPE:** subtype. **FUNCTIONALITY:** step by step. **DEPENDENCIES:** what it calls. **RISKS:** what breaks if modified. **DEV TIPS:** 3 tips."
+
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(
+      { type: 'AI_EXPLAIN', prompt, apiKey },
+      (response) => {
+        if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return }
+        if (response?.error) { reject(new Error(response.error)); return }
+        resolve(response?.text || 'No response')
+      }
+    )
+  })
+}
+
 export async function explainImpact(
   objectName: string,
   fieldName: string,

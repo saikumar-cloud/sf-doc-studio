@@ -8,8 +8,9 @@ import {
   type SFObject, type SFField, type DependencySummary, type ObjectSummary
 } from './services/salesforce/metadata'
 import { generateHtmlReport } from './services/salesforce/reportGenerator'
+import { fetchOmniStudioComponents, explainOmniComponent } from './services/salesforce/metadata'
 
-type View = 'objects' | 'object-doc' | 'fields' | 'impact' | 'settings'
+type View = 'objects' | 'object-doc' | 'fields' | 'impact' | 'settings' | 'omni'
 
 function App() {
   const [connecting, setConnecting] = useState(false)
@@ -40,6 +41,10 @@ function App() {
   const [saveSequence, setSaveSequence] = useState('')
   const [loadingSaveSequence, setLoadingSaveSequence] = useState(false)
   const [exportingPdf, setExportingPdf] = useState(false)
+  const [omniComponents, setOmniComponents] = useState<any>(null)
+  const [loadingOmni, setLoadingOmni] = useState(false)
+  const [omniExplanation, setOmniExplanation] = useState('')
+  const [selectedOmni, setSelectedOmni] = useState<{name:string, type:string, data:any} | null>(null)
   const [componentExplanation, setComponentExplanation] = useState('')
   const [loadingComponent, setLoadingComponent] = useState(false)
 
@@ -605,6 +610,83 @@ Object stats:
     )
   }
 
+  // OmniStudio View
+  if (view === 'omni') {
+    const OmniSection = ({ title, icon, items, type, color }: { title: string, icon: string, items: any[], type: string, color: string }) => {
+      const [expanded, setExpanded] = useState(false)
+      if (items.length === 0) return (
+        <div style={{ padding: '10px 12px', background: '#161b22', borderRadius: '8px', marginBottom: '6px', border: '1px solid #21262d' }}>
+          <span style={{ fontSize: '12px', color: '#484f58' }}>{icon} {title} — not found in this org</span>
+        </div>
+      )
+      return (
+        <div style={{ marginBottom: '6px' }}>
+          <div onClick={() => setExpanded(!expanded)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: '#161b22', border: '1px solid ' + color + '33', borderRadius: '8px', cursor: 'pointer' }}>
+            <span style={{ fontSize: '14px' }}>{icon}</span>
+            <span style={{ fontSize: '12px', fontWeight: '600', flex: 1 }}>{title}</span>
+            <span style={{ fontSize: '11px', background: color + '22', color, padding: '2px 8px', borderRadius: '10px' }}>{items.length}</span>
+            <span style={{ fontSize: '10px', color: '#8b949e' }}>{expanded ? '▲' : '▼'}</span>
+          </div>
+          {expanded && (
+            <div style={{ background: '#0d1117', border: '1px solid ' + color + '22', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
+              {items.map((item: any) => (
+                <div key={item.Id} onClick={() => {
+                  if (!apiKey) { setShowApiKey(true); return }
+                  setSelectedOmni({ name: item.Name, type, data: item })
+                  setOmniExplanation('')
+                  explainOmniComponent(type, item.Name, item, apiKey)
+                    .then(setOmniExplanation).catch(console.error)
+                }} style={{ padding: '8px 12px', fontSize: '12px', color, borderBottom: '1px solid #21262d', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>{item.Name}</span>
+                  <span style={{ fontSize: '10px', color: '#484f58' }}>✨ explain</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    return (
+      <div style={containerStyle}>
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid #21262d', display: 'flex', alignItems: 'center', gap: '10px', background: '#0d1117' }}>
+          <button onClick={() => setView('objects')} style={{ background: 'none', border: 'none', color: '#8b949e', cursor: 'pointer', fontSize: '18px', padding: '0' }}>←</button>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '14px', fontWeight: '700' }}>OmniStudio</div>
+            <div style={{ fontSize: '11px', color: '#8b949e' }}>Vlocity / OmniStudio components</div>
+          </div>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
+          {selectedOmni ? (
+            <div>
+              <button onClick={() => setSelectedOmni(null)} style={{ background: 'none', border: 'none', color: '#8b949e', cursor: 'pointer', fontSize: '13px', marginBottom: '12px', padding: '0' }}>← Back</button>
+              <div style={{ fontSize: '13px', fontWeight: '700', marginBottom: '4px' }}>{selectedOmni.name}</div>
+              <div style={{ fontSize: '11px', color: '#8b949e', marginBottom: '12px' }}>{selectedOmni.type}</div>
+              {!omniExplanation ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#8b949e', fontSize: '12px' }}>✨ Claude is analyzing...</div>
+              ) : (
+                <div style={{ padding: '12px', background: '#161b22', borderRadius: '8px', border: '1px solid #6e40c944' }}>
+                  <div style={{ fontSize: '11px', color: '#6e40c9', fontWeight: '700', marginBottom: '8px' }}>✨ AI ANALYSIS</div>
+                  <div style={{ fontSize: '12px', lineHeight: '1.7', color: '#e6edf3', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{omniExplanation}</div>
+                </div>
+              )}
+            </div>
+          ) : loadingOmni ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#8b949e', fontSize: '12px' }}>🔍 Scanning for OmniStudio components...</div>
+          ) : (
+            <>
+              <div style={{ fontSize: '11px', color: '#8b949e', marginBottom: '12px' }}>Click any component to get AI explanation</div>
+              <OmniSection title="OmniScripts" icon="📋" items={omniComponents?.omniScripts || []} type="OmniScript" color="#8957e5" />
+              <OmniSection title="DataRaptors" icon="⚡" items={omniComponents?.dataRaptors || []} type="DataRaptor" color="#1f6feb" />
+              <OmniSection title="Integration Procedures" icon="🔗" items={omniComponents?.integrationProcedures || []} type="IntegrationProcedure" color="#238636" />
+              <OmniSection title="FlexCards" icon="🃏" items={omniComponents?.flexCards || []} type="FlexCard" color="#e3b341" />
+            </>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   // Settings View
   if (view === 'settings') {
     return (
@@ -678,6 +760,7 @@ Object stats:
           <div style={{ fontSize: '13px', fontWeight: '700' }}>SF Doc Studio</div>
           <div style={{ fontSize: '11px', color: '#00c851' }}>● Connected</div>
         </div>
+        <button onClick={() => { setView('omni'); setLoadingOmni(true); fetchOmniStudioComponents(instanceUrl, accessToken).then(setOmniComponents).catch(console.error).finally(() => setLoadingOmni(false)) }} style={{ background: 'none', border: '1px solid #30363d', borderRadius: '4px', color: '#8b949e', cursor: 'pointer', fontSize: '10px', padding: '3px 6px' }}>OmniStudio</button>
         <button onClick={() => setView('settings')} style={{ background: 'none', border: 'none', color: '#8b949e', cursor: 'pointer', fontSize: '18px', padding: '0' }}>⚙️</button>
       </div>
       <div style={{ padding: '10px 16px', borderBottom: '1px solid #21262d' }}>
