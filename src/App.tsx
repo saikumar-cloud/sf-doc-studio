@@ -7,6 +7,7 @@ import {
   fetchValidationRule, fetchSaveSequence, explainValidationRule, explainSaveSequence,
   type SFObject, type SFField, type DependencySummary, type ObjectSummary
 } from './services/salesforce/metadata'
+import { generateHtmlReport } from './services/salesforce/reportGenerator'
 
 type View = 'objects' | 'object-doc' | 'fields' | 'impact' | 'settings'
 
@@ -38,6 +39,7 @@ function App() {
   const [selectedComponent, setSelectedComponent] = useState<{name:string, type:string} | null>(null)
   const [saveSequence, setSaveSequence] = useState('')
   const [loadingSaveSequence, setLoadingSaveSequence] = useState(false)
+  const [exportingPdf, setExportingPdf] = useState(false)
   const [componentExplanation, setComponentExplanation] = useState('')
   const [loadingComponent, setLoadingComponent] = useState(false)
 
@@ -137,6 +139,26 @@ function App() {
       setComponentExplanation('Failed: ' + (e as Error).message)
     }
     setLoadingComponent(false)
+  }
+
+  const handleExport = async () => {
+    if (!objSummary || !fields.length) { alert("Please wait for object data to load first"); return }
+    if (!apiKey) { setShowApiKey(true); return }
+    setExportingPdf(true)
+    try {
+      const flowNames = (objSummary?.flows || []).slice(0,5).map((f:any) => f.name).join(", ") || "None"
+      const classNames = (objSummary?.apexClasses || []).slice(0,5).map((f:any) => f.name).join(", ") || "None"
+      const prompt = ["Write documentation for", selectedObject!.label, "(" + selectedObject!.name + ").", "Stats:", fields.length, "fields,", (objSummary?.flows.length||0), "Flows (" + flowNames + "),", (objSummary?.apexClasses.length||0), "Apex Classes (" + classNames + "),", (objSummary?.apexTriggers.length||0), "Triggers,", (objSummary?.validationRules.length||0), "Validation Rules.", "Write: 1. Executive Summary (3-4 sentences for business) 2. Technical Overview 3. Key Business Rules 4. Integration Points 5. Developer Recommendations"].join(" ")
+      console.log("Starting export for", selectedObject?.name)
+      const aiSummary = await explainImpact("", "", "", null, apiKey, prompt)
+      const html = generateHtmlReport(selectedObject!, fields, objSummary!, aiSummary, instanceUrl)
+      const encoded = "data:text/html;charset=utf-8," + encodeURIComponent(html)
+      const url = encoded
+      chrome.tabs.create({ url })
+    } catch(e) {
+      alert("Export failed: " + (e as Error).message)
+    }
+    setExportingPdf(false)
   }
 
   const handleAiExplain = async (promptType?: string) => {
@@ -423,6 +445,9 @@ Object stats:
             <div style={{ fontSize: '11px', color: '#8b949e' }}>{selectedObject.name}</div>
           </div>
           {selectedObject.custom && <span style={{ fontSize: '10px', background: '#032d60', color: '#00a1e0', padding: '2px 6px', borderRadius: '4px' }}>Custom</span>}
+          <button onClick={handleExport} disabled={exportingPdf} style={{ background: 'none', border: '1px solid #30363d', borderRadius: '6px', color: exportingPdf ? '#484f58' : '#8b949e', cursor: exportingPdf ? 'not-allowed' : 'pointer', fontSize: '11px', padding: '4px 8px' }}>
+            {exportingPdf ? '⏳' : '📄 Export'}
+          </button>
         </div>
 
         {/* Tabs */}
