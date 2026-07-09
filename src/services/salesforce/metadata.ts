@@ -458,18 +458,25 @@ export async function fetchValidationRule(
 ): Promise<string> {
   const records = await toolingQueryViaBackground(instanceUrl, accessToken,
     `SELECT Id, ValidationName, Description, ErrorMessage, ErrorDisplayField, Active FROM ValidationRule WHERE EntityDefinition.QualifiedApiName='${objectName}' AND ValidationName='${ruleName}' LIMIT 1`)
-  if (records.length === 0) return ''
+  if (records.length === 0) return JSON.stringify({ ValidationName: ruleName })
   
-  // Get the formula
   const rule = records[0]
-  const metaResp = await new Promise<any>((resolve) => {
+  
+  // Fetch full metadata including formula via FETCH_REST
+  return new Promise((resolve) => {
     chrome.runtime.sendMessage(
       { type: 'FETCH_REST', instanceUrl, accessToken, path: `/services/data/v62.0/tooling/sobjects/ValidationRule/${rule.Id}` },
-      (response) => resolve(response?.data || {})
+      (response) => {
+        const meta = response?.data?.Metadata || {}
+        resolve(JSON.stringify({
+          ...rule,
+          formula: meta.errorConditionFormula || '',
+          description: meta.description || rule.Description || '',
+          active: meta.active !== undefined ? meta.active : rule.Active
+        }))
+      }
     )
   })
-  
-  return JSON.stringify({ ...rule, formula: metaResp?.Metadata?.errorConditionFormula || '' })
 }
 
 export async function fetchSaveSequence(
