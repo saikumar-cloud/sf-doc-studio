@@ -1,4 +1,4 @@
-const CLIENT_ID = '3MVG9XgkMlifdwVAd_Iq0rT000LJK1w9dcQaWN9QcQWl2eMgqigkP.WXUxWvKNUYf5A50cKnacVPv38YgmoON'
+const CLIENT_ID = import.meta.env.VITE_SF_CLIENT_ID || ''
 
 export function startSalesforceOAuth(
   onSuccess: (accessToken: string, instanceUrl: string) => void,
