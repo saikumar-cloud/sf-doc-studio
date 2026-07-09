@@ -18,6 +18,7 @@ function App() {
   const [objects, setObjects] = useState<SFObject[]>([])
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
+  const [objectFilter, setObjectFilter] = useState<'all'|'custom'|'managed'|'standard'>('all')
   const [view, setView] = useState<View>('objects')
   const [selectedObject, setSelectedObject] = useState<SFObject | null>(null)
   const [fields, setFields] = useState<SFField[]>([])
@@ -192,10 +193,18 @@ Object stats:
     return { score, color: '#238636', label: 'Low Risk', emoji: '🟢' }
   }
 
-  const filteredObjects = objects.filter(o =>
-    o.label.toLowerCase().includes(search.toLowerCase()) ||
-    o.name.toLowerCase().includes(search.toLowerCase())
-  )
+  const isManaged = (o: SFObject) => o.custom && o.name.includes('__') && o.name.split('__').length > 2
+  const isYourCustom = (o: SFObject) => o.custom && !isManaged(o)
+  
+  const filteredObjects = objects.filter(o => {
+    const matchesSearch = o.label.toLowerCase().includes(search.toLowerCase()) ||
+      o.name.toLowerCase().includes(search.toLowerCase())
+    const matchesFilter = objectFilter === 'all' || 
+      (objectFilter === 'custom' && isYourCustom(o)) || 
+      (objectFilter === 'managed' && isManaged(o)) ||
+      (objectFilter === 'standard' && !o.custom)
+    return matchesSearch && matchesFilter
+  })
   const filteredFields = fields.filter(f =>
     f.label.toLowerCase().includes(fieldSearch.toLowerCase()) ||
     f.name.toLowerCase().includes(fieldSearch.toLowerCase())
@@ -581,9 +590,24 @@ Object stats:
           <div style={{ fontSize: '11px', color: '#00c851' }}>● Connected</div>
         </div>
       </div>
-      <div style={{ padding: '12px 16px', borderBottom: '1px solid #21262d' }}>
+      <div style={{ padding: '10px 16px', borderBottom: '1px solid #21262d' }}>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search objects..."
-          style={{ width: '100%', padding: '8px 12px', background: '#1a2332', border: '1px solid #30363d', borderRadius: '8px', color: '#ffffff', fontSize: '13px', boxSizing: 'border-box', outline: 'none' }} />
+          style={{ width: '100%', padding: '8px 12px', background: '#1a2332', border: '1px solid #30363d', borderRadius: '8px', color: '#ffffff', fontSize: '13px', boxSizing: 'border-box', outline: 'none', marginBottom: '8px' }} />
+        <div style={{ display: 'flex', gap: '4px' }}>
+          {[
+            { key: 'all', label: `All ${objects.length}` },
+            { key: 'custom', label: `Custom ${objects.filter(o => o.custom && !o.name.includes('__') || o.custom && o.name.split('__').length <= 2).length}` },
+            { key: 'managed', label: `Packages ${objects.filter(o => o.custom && o.name.split('__').length > 2).length}` },
+            { key: 'standard', label: `Standard ${objects.filter(o=>!o.custom).length}` },
+          ].map(f => (
+            <button key={f.key} onClick={() => setObjectFilter(f.key as any)} style={{
+              flex: 1, padding: '4px 2px', borderRadius: '6px', border: 'none',
+              background: objectFilter === f.key ? '#00a1e0' : '#1a2332',
+              color: objectFilter === f.key ? '#fff' : '#8b949e',
+              fontSize: '10px', cursor: 'pointer', fontWeight: objectFilter === f.key ? '600' : '400'
+            }}>{f.label}</button>
+          ))}
+        </div>
       </div>
       <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
         {loading ? (
@@ -601,7 +625,7 @@ Object stats:
         )}
       </div>
       <div style={{ padding: '10px 16px', borderTop: '1px solid #21262d', fontSize: '11px', color: '#484f58', textAlign: 'center' }}>
-        {objects.length} objects · {filteredObjects.length} shown
+        {filteredObjects.length} of {objects.length} objects shown
       </div>
     </div>
   )
