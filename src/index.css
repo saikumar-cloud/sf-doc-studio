@@ -50,20 +50,21 @@
   }
 }
 
-#root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-}
-
+/* The extension popup is a fixed 380x580 panel. Size the page to match so
+   Chrome does not stretch the popup and leave empty space beside it. */
+html,
 body {
   margin: 0;
+  width: 380px;
+  height: 580px;
+  overflow: hidden;
+  background: #0f1117;
+}
+
+#root {
+  width: 380px;
+  height: 580px;
+  text-align: center;
 }
 
 h1,
