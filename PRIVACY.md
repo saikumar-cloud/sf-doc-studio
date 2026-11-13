@@ -12,7 +12,7 @@ SF Doc Studio is a Chrome extension that documents and analyzes the configuratio
 
 ## How sign-in works
 
-SF Doc Studio does not ask for your Salesforce password. When you click **Connect**, it reads the Salesforce session cookie (`sid`) that your browser already holds for the org you are logged in to, and uses it to call that org's API as you, with your existing permissions. The session value is used only for requests to your own Salesforce org. It is kept in memory while the popup is open, is not saved to disk by the extension, and is never sent to Anthropic, the developer, or anyone else.
+SF Doc Studio does not ask for your Salesforce password. When you click **Connect**, it reads the Salesforce session cookie (`sid`) that your browser already holds for the org you are logged in to, and uses it to call that org's API as you, with your existing permissions. The session value is used only for requests to your own Salesforce org. It is kept in memory while the panel is open, is not saved to disk by the extension, and is never sent to Anthropic, the developer, or anyone else.
 
 ## What the extension accesses
 
@@ -40,16 +40,19 @@ Stored in Chrome's local extension storage (`chrome.storage.local`) on your comp
 
 - The URL of the Salesforce org you last connected to
 - Your Anthropic API key
-- Your optional model preference
+- Your optional model preference and whether the quick access button is shown
+- The most recent report you exported, so the report tab can display it
 
 This data is not synced and is never transmitted to the developer. To delete it, open **Settings > Disconnect & Clear All Data**, or uninstall the extension.
 
 ## Permissions
 
 - `cookies` - to read the Salesforce session cookie for the org you are already logged in to, so you do not have to sign in again
+- `sidePanel` - to show the extension in Chrome's side panel so it stays open while you switch tabs
 - `storage` - to keep the items listed above on your device
 - Access to `*.salesforce.com` - to read that session cookie and to read metadata from your org
 - Access to `api.anthropic.com` - to request AI explanations
+- A small script on Salesforce pages (`*.lightning.force.com`, `*.my.salesforce.com`, `*.my.salesforce-setup.com`) - only to draw the quick access button that opens the side panel. It does not read or change page content, and the button can be turned off in Settings
 
 ## Limited Use
 

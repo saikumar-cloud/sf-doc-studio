@@ -50,20 +50,18 @@
   }
 }
 
-/* The extension popup is a fixed 380x580 panel. Size the page to match so
-   Chrome does not stretch the popup and leave empty space beside it. */
+/* The app runs in Chrome's side panel: fill whatever width and height it has. */
 html,
-body {
+body,
+#root {
   margin: 0;
-  width: 380px;
-  height: 580px;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
   background: #0f1117;
 }
 
 #root {
-  width: 380px;
-  height: 580px;
   text-align: center;
 }
 

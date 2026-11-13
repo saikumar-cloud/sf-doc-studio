@@ -18,6 +18,8 @@ AI-powered impact analyzer and documentation tool for Salesforce orgs. Bring you
 SF Doc Studio helps Salesforce admins and developers understand an org quickly. Connect to your org, pick an object, and see what depends on it, then let AI explain it in plain English.
 
 WHAT IT DOES
+• Lives in Chrome's side panel, so it stays open next to Salesforce while you work
+• Quick access tab on the edge of Salesforce pages opens it in one click (can be turned off)
 • Object browser: search every object, filtered by Custom, Package, or Standard
 • Impact analyzer: pick any field and see the Flows, Apex classes, triggers, validation rules, layouts, and reports that reference it, with a risk score
 • AI explanations: one click to document an Apex class, trigger, Flow, or validation rule
@@ -55,8 +57,10 @@ SF Doc Studio documents and analyzes the metadata of a Salesforce org the user c
 **Permission justifications:**
 
 - `cookies`: Used only to read the Salesforce session cookie ("sid") on the user's own *.my.salesforce.com domain when they click Connect, so the extension can call the Salesforce API as the already-logged-in user. No other cookies are read, and the value is sent only to that Salesforce org.
-- `storage`: Stores the connected org's URL, the user's Anthropic API key, and model preference locally so they do not have to re-enter them each time the popup opens.
+- `sidePanel`: The extension's interface is shown in Chrome's side panel so it stays open next to Salesforce while the user switches tabs. It is opened only when the user clicks the toolbar icon.
+- `storage`: Stores the connected org's URL, the user's Anthropic API key, and model preference, and the most recently exported report locally so they do not have to re-enter them each time the popup opens.
 - Host permission `https://*.salesforce.com/*`: Required to read the session cookie described above and to call the Salesforce REST and Tooling APIs on the user's own org domain (for example acme.my.salesforce.com) to read object, field, and automation metadata. The subdomain differs for every customer, so a wildcard is needed.
+- Content script on `https://*.lightning.force.com/*`, `https://*.my.salesforce.com/*`, `https://*.my.salesforce-setup.com/*`: Adds a small button on the edge of Salesforce pages that opens the extension's side panel when clicked. The script does not read or modify page content, and the button can be disabled in Settings.
 - Host permission `https://api.anthropic.com/*`: Required to send the metadata the user chooses to analyze to the Anthropic API, using the user's own API key, to generate explanations.
 
 **Remote code:** No, I am not using remote code. (All JavaScript is bundled in the package.)
@@ -83,4 +87,4 @@ https://github.com/saikumar-cloud/sf-doc-studio/blob/main/PRIVACY.md
 Reviewers cannot sign in without a Salesforce org. Create a free Developer Edition org at developer.salesforce.com/signup, make a dedicated test user, and provide:
 
 - Username / password of the test user
-- A note: "Log in at https://login.salesforce.com with the credentials above in a normal Chrome tab. Then click the extension icon and click Connect to Salesforce. AI features need an Anthropic API key entered in Settings; browsing objects and impact analysis work without one."
+- A note: "Log in at https://login.salesforce.com with the credentials above in a normal Chrome tab. Then click the extension icon (it opens in the side panel) and click Connect to Salesforce. AI features need an Anthropic API key entered in Settings; browsing objects and impact analysis work without one."

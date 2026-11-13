@@ -18,6 +18,7 @@ function App() {
   const [orgChoices, setOrgChoices] = useState<SFSession[]>([])
   const [connectError, setConnectError] = useState('')
   const [model, setModel] = useState('')
+  const [showPageButton, setShowPageButton] = useState(true)
   const [instanceUrl, setInstanceUrl] = useState('')
   const [accessToken, setAccessToken] = useState('')
   const [objects, setObjects] = useState<SFObject[]>([])
@@ -65,7 +66,8 @@ function App() {
   }
 
   useEffect(() => {
-    chrome.storage.local.get(['instanceUrl', 'anthropicKey', 'anthropicModel'], (result) => {
+    chrome.storage.local.get(['instanceUrl', 'anthropicKey', 'anthropicModel', 'showPageButton'], (result) => {
+      if (result.showPageButton === false) setShowPageButton(false)
       if (result.anthropicKey) setApiKey(result.anthropicKey as string)
       if (result.anthropicModel) setModel(result.anthropicModel as string)
       if (result.instanceUrl) {
@@ -209,9 +211,9 @@ function App() {
       const prompt = ["Write documentation for", selectedObject!.label, "(" + selectedObject!.name + ").", "Stats:", fields.length, "fields,", (objSummary?.flows.length||0), "Flows (" + flowNames + "),", (objSummary?.apexClasses.length||0), "Apex Classes (" + classNames + "),", (objSummary?.apexTriggers.length||0), "Triggers,", (objSummary?.validationRules.length||0), "Validation Rules.", "Write: 1. Executive Summary (3-4 sentences for business) 2. Technical Overview 3. Key Business Rules 4. Integration Points 5. Developer Recommendations"].join(" ")
       const aiSummary = await explainImpact("", "", "", null, apiKey, prompt)
       const html = generateHtmlReport(selectedObject!, fields, objSummary!, aiSummary, instanceUrl)
-      const encoded = "data:text/html;charset=utf-8," + encodeURIComponent(html)
-      const url = encoded
-      chrome.tabs.create({ url })
+      // Hand the report to the extension's own report page and open it in a new tab.
+      await chrome.storage.local.set({ sfdsReport: html })
+      await chrome.tabs.create({ url: chrome.runtime.getURL('report.html') })
     } catch(e) {
       alert("Export failed: " + (e as Error).message)
     }
@@ -290,7 +292,7 @@ Object stats:
   )
 
   const containerStyle = {
-    width: '380px', height: '580px',
+    width: '100%', height: '100vh', minWidth: '320px',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
     background: '#0f1117', color: '#ffffff',
     display: 'flex', flexDirection: 'column' as const,
@@ -803,6 +805,15 @@ Object stats:
             />
           </div>
 
+          {/* Page button */}
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{ fontSize: '12px', fontWeight: '700', color: '#8b949e', marginBottom: '8px' }}>QUICK ACCESS BUTTON</div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', background: '#161b22', borderRadius: '8px', border: '1px solid #21262d', cursor: 'pointer', textAlign: 'left' }}>
+              <input type="checkbox" checked={showPageButton} onChange={e => { setShowPageButton(e.target.checked); chrome.storage.local.set({ showPageButton: e.target.checked }) }} />
+              <span style={{ fontSize: '12px', color: '#e6edf3' }}>Show the SF Doc Studio tab on the right edge of Salesforce pages</span>
+            </label>
+          </div>
+
           {/* Connection */}
           <div style={{ marginBottom: '24px' }}>
             <div style={{ fontSize: '12px', fontWeight: '700', color: '#8b949e', marginBottom: '8px' }}>SALESFORCE CONNECTION</div>
@@ -817,6 +828,7 @@ Object stats:
               setInstanceUrl('')
               setApiKey('')
               setModel('')
+              setShowPageButton(true)
               setObjects([])
               setView('objects')
             }} style={{ width: '100%', padding: '10px', borderRadius: '8px', background: '#21262d', color: '#cf222e', border: '1px solid #cf222e44', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>
