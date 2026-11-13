@@ -5,14 +5,15 @@
   "description": "AI-powered impact analyzer and documentation tool for Salesforce orgs. Bring your own Anthropic API key.",
   "permissions": [
     "storage",
-    "cookies"
+    "cookies",
+    "sidePanel"
   ],
   "host_permissions": [
     "https://*.salesforce.com/*",
     "https://api.anthropic.com/*"
   ],
   "action": {
-    "default_popup": "index.html",
+    "default_title": "Open SF Doc Studio",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
@@ -27,5 +28,22 @@
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
-  }
+  },
+  "minimum_chrome_version": "116",
+  "side_panel": {
+    "default_path": "index.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.lightning.force.com/*",
+        "https://*.my.salesforce.com/*",
+        "https://*.my.salesforce-setup.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
 }

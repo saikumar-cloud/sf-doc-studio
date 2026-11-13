@@ -1,6 +1,9 @@
 // SF Doc Studio - background service worker
 // Reads the user's existing Salesforce session and makes all network calls to Salesforce and Anthropic.
 
+// Clicking the toolbar icon opens the side panel, which stays open across tab switches.
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+
 const API_VERSION = 'v62.0';
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
 
@@ -154,6 +157,15 @@ async function handleMessage(message) {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Only accept messages from this extension's own pages.
   if (sender.id !== chrome.runtime.id) return false;
+
+  // The page button (content script) may only ask to open the side panel.
+  if (sender.tab) {
+    if (message.type === 'OPEN_PANEL') {
+      // Must be called directly in the click's message handler to count as a user gesture.
+      chrome.sidePanel.open({ windowId: sender.tab.windowId }).catch(() => {});
+    }
+    return false;
+  }
   handleMessage(message)
     .then(sendResponse)
     .catch(err => sendResponse({ error: err.message }));

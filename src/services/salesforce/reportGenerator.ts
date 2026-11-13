@@ -67,7 +67,7 @@ export function generateHtmlReport(
   `
 
   return '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + esc(obj.label) + ' - SF Doc Report</title><style>' + css + '</style></head><body>' +
-    '<button class="print-btn" onclick="window.print()">🖨️ Print / Save PDF</button>' +
+    '<button class="print-btn">🖨️ Print / Save PDF</button>' +
     '<div class="header"><h1>' + esc(obj.label) + '</h1><div class="meta">' + esc(obj.name) + ' · ' + (obj.custom ? 'Custom Object' : 'Standard Object') + ' · Generated ' + now + ' by SF Doc Studio</div></div>' +
     '<div class="stats">' +
       '<div class="stat"><div class="stat-val">' + fields.length + '</div><div class="stat-lbl">Fields</div></div>' +
