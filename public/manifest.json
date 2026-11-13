@@ -1,18 +1,14 @@
 {
   "manifest_version": 3,
   "name": "SF Doc Studio",
-  "version": "0.1.0",
-  "description": "AI-powered Impact Analyzer and Documentation tool for Salesforce orgs.",
+  "version": "1.0.0",
+  "description": "AI-powered impact analyzer and documentation tool for Salesforce orgs. Bring your own Anthropic API key.",
   "permissions": [
     "storage",
-    "activeTab",
-    "scripting",
-    "identity"
+    "cookies"
   ],
   "host_permissions": [
     "https://*.salesforce.com/*",
-    "https://*.force.com/*",
-    "https://*.lightning.force.com/*",
     "https://api.anthropic.com/*"
   ],
   "action": {

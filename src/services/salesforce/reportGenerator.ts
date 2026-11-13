@@ -1,3 +1,9 @@
+function esc(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+}
+
 export function generateHtmlReport(
   obj: { name: string, label: string, custom: boolean },
   fields: any[],
@@ -12,12 +18,12 @@ export function generateHtmlReport(
 
   const fieldsRows = fields.slice(0, 100).map((f: any) => {
     const custom = f.custom ? '<span style="color:#00a1e0">✓</span>' : ''
-    return '<tr><td>' + f.label + '</td><td><code>' + f.name + '</code></td><td>' + f.type + '</td><td>' + custom + '</td></tr>'
+    return '<tr><td>' + esc(f.label) + '</td><td><code>' + esc(f.name) + '</code></td><td>' + esc(f.type) + '</td><td>' + custom + '</td></tr>'
   }).join('')
 
   const automationGroup = (title: string, items: any[], icon: string) => {
     if (!items || items.length === 0) return ''
-    const lis = items.map((i: any) => '<li>' + i.name + '</li>').join('')
+    const lis = items.map((i: any) => '<li>' + esc(i.name) + '</li>').join('')
     return '<div class="agroup"><h4>' + icon + ' ' + title + ' (' + items.length + ')</h4><ul>' + lis + '</ul></div>'
   }
 
@@ -60,9 +66,9 @@ export function generateHtmlReport(
     @media print { .print-btn { display:none; } body { print-color-adjust:exact; -webkit-print-color-adjust:exact; } }
   `
 
-  return '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + obj.label + ' - SF Doc Report</title><style>' + css + '</style></head><body>' +
-    '<button class="print-btn" onclick="setTimeout(()=>window.print(),500)">🖨️ Print / Save PDF</button><script>setTimeout(()=>{document.title="' + obj.label + ' - SF Doc Report"},100)</script>' +
-    '<div class="header"><h1>' + obj.label + '</h1><div class="meta">' + obj.name + ' · ' + (obj.custom ? 'Custom Object' : 'Standard Object') + ' · Generated ' + now + ' by SF Doc Studio</div></div>' +
+  return '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + esc(obj.label) + ' - SF Doc Report</title><style>' + css + '</style></head><body>' +
+    '<button class="print-btn" onclick="window.print()">🖨️ Print / Save PDF</button>' +
+    '<div class="header"><h1>' + esc(obj.label) + '</h1><div class="meta">' + esc(obj.name) + ' · ' + (obj.custom ? 'Custom Object' : 'Standard Object') + ' · Generated ' + now + ' by SF Doc Studio</div></div>' +
     '<div class="stats">' +
       '<div class="stat"><div class="stat-val">' + fields.length + '</div><div class="stat-lbl">Fields</div></div>' +
       '<div class="stat"><div class="stat-val">' + automationCount + '</div><div class="stat-lbl">Automations</div></div>' +
@@ -70,7 +76,7 @@ export function generateHtmlReport(
       '<div class="stat"><div class="stat-val">' + objSummary.layouts.length + '</div><div class="stat-lbl">Layouts</div></div>' +
     '</div>' +
     '<div class="content">' +
-      '<div class="section"><h2>📋 AI Documentation</h2><div class="ai-box">' + aiSummary + '</div></div>' +
+      '<div class="section"><h2>📋 AI Documentation</h2><div class="ai-box">' + esc(aiSummary) + '</div></div>' +
       '<div class="section"><h2>⚡ Automations & References</h2>' + automationsHtml + '</div>' +
       '<div class="section"><h2>🗂️ Fields (' + fields.length + ')</h2><table><thead><tr><th>Label</th><th>API Name</th><th>Type</th><th>Custom</th></tr></thead><tbody>' + fieldsRows + '</tbody></table>' +
       (fields.length > 100 ? '<p style="color:#999;font-size:11px;margin-top:8px;">Showing 100 of ' + fields.length + ' fields</p>' : '') +

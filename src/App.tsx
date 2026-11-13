@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { startSalesforceOAuth } from './services/auth/salesforce'
+import { listSalesforceSessions, getSalesforceSession, type SFSession } from './services/auth/session'
 import { 
   fetchObjects, fetchObjectDetail, fetchFieldDependenciesSummary, 
   fetchObjectSummary, explainImpact, fetchApexClassBody, fetchApexTriggerBody,
@@ -15,6 +15,9 @@ type View = 'objects' | 'object-doc' | 'fields' | 'impact' | 'settings' | 'omni'
 function App() {
   const [connecting, setConnecting] = useState(false)
   const [connected, setConnected] = useState(false)
+  const [orgChoices, setOrgChoices] = useState<SFSession[]>([])
+  const [connectError, setConnectError] = useState('')
+  const [model, setModel] = useState('')
   const [instanceUrl, setInstanceUrl] = useState('')
   const [accessToken, setAccessToken] = useState('')
   const [objects, setObjects] = useState<SFObject[]>([])
@@ -51,34 +54,34 @@ function App() {
   const [componentExplanation, setComponentExplanation] = useState('')
   const [loadingComponent, setLoadingComponent] = useState(false)
 
+  const connectSession = (session: SFSession) => {
+    chrome.storage.local.set({ instanceUrl: session.instanceUrl })
+    chrome.storage.local.remove('accessToken') // older versions stored the token; it is no longer persisted
+    setInstanceUrl(session.instanceUrl)
+    setAccessToken(session.accessToken)
+    setOrgChoices([])
+    setConnectError('')
+    setConnected(true)
+  }
+
   useEffect(() => {
-    chrome.storage.local.get(['accessToken', 'instanceUrl', 'anthropicKey'], (result) => {
+    chrome.storage.local.get(['instanceUrl', 'anthropicKey', 'anthropicModel'], (result) => {
       if (result.anthropicKey) setApiKey(result.anthropicKey as string)
-      if (result.accessToken && result.instanceUrl) {
-        // Validate token via background worker
-        chrome.runtime.sendMessage(
-          { type: 'VALIDATE_TOKEN', instanceUrl: result.instanceUrl, accessToken: result.accessToken },
-          (response) => {
-            if (response?.valid) {
-              setConnected(true)
-              setInstanceUrl(result.instanceUrl as string)
-              setAccessToken(result.accessToken as string)
-            } else {
-              chrome.storage.local.remove(['accessToken'])
-              console.log('Token expired, cleared')
-            }
-          }
-        )
+      if (result.anthropicModel) setModel(result.anthropicModel as string)
+      if (result.instanceUrl) {
+        // Reconnect to the org used last time, if the user is still logged in to it.
+        getSalesforceSession(result.instanceUrl as string)
+          .then(session => { if (session) connectSession(session) })
+          .catch(() => {})
       }
     })
   }, [])
 
   const handleTokenExpired = () => {
-    chrome.storage.local.remove(['accessToken'])
     setAccessToken('')
     setConnected(false)
     setObjects([])
-    alert('Your Salesforce session has expired. Please reconnect.')
+    setConnectError('Your Salesforce session has expired. Log in to Salesforce again, then click Connect.')
   }
 
   useEffect(() => {
@@ -96,10 +99,20 @@ function App() {
 
   const handleConnect = () => {
     setConnecting(true)
-    startSalesforceOAuth(
-      (token, url) => { setConnected(true); setInstanceUrl(url); setAccessToken(token); setConnecting(false) },
-      (_error) => setConnecting(false)
-    )
+    setConnectError('')
+    setOrgChoices([])
+    listSalesforceSessions()
+      .then(sessions => {
+        if (sessions.length === 0) {
+          setConnectError('No active Salesforce login found. Log in to your org in this browser, then click Connect again.')
+        } else if (sessions.length === 1) {
+          connectSession(sessions[0])
+        } else {
+          setOrgChoices(sessions)
+        }
+      })
+      .catch(err => setConnectError(err.message || 'Could not read your Salesforce session.'))
+      .finally(() => setConnecting(false))
   }
 
   const handleSelectObject = (obj: SFObject) => {
@@ -194,7 +207,6 @@ function App() {
       const flowNames = (objSummary?.flows || []).slice(0,5).map((f:any) => f.name).join(", ") || "None"
       const classNames = (objSummary?.apexClasses || []).slice(0,5).map((f:any) => f.name).join(", ") || "None"
       const prompt = ["Write documentation for", selectedObject!.label, "(" + selectedObject!.name + ").", "Stats:", fields.length, "fields,", (objSummary?.flows.length||0), "Flows (" + flowNames + "),", (objSummary?.apexClasses.length||0), "Apex Classes (" + classNames + "),", (objSummary?.apexTriggers.length||0), "Triggers,", (objSummary?.validationRules.length||0), "Validation Rules.", "Write: 1. Executive Summary (3-4 sentences for business) 2. Technical Overview 3. Key Business Rules 4. Integration Points 5. Developer Recommendations"].join(" ")
-      console.log("Starting export for", selectedObject?.name)
       const aiSummary = await explainImpact("", "", "", null, apiKey, prompt)
       const html = generateHtmlReport(selectedObject!, fields, objSummary!, aiSummary, instanceUrl)
       const encoded = "data:text/html;charset=utf-8," + encodeURIComponent(html)
@@ -327,10 +339,29 @@ Object stats:
       <div style={{ ...containerStyle, alignItems: 'center', justifyContent: 'center', padding: '40px 32px' }}>
         <div style={{ width: '64px', height: '64px', background: 'linear-gradient(135deg, #00a1e0, #032d60)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', marginBottom: '24px' }}>⚡</div>
         <h1 style={{ fontSize: '22px', fontWeight: '700', margin: '0 0 8px 0', textAlign: 'center' }}>SF Doc Studio</h1>
-        <p style={{ fontSize: '13px', color: '#8b949e', textAlign: 'center', margin: '0 0 40px 0', lineHeight: '1.5' }}>AI-powered Impact Analyzer &<br />Documentation for Salesforce orgs</p>
+        <p style={{ fontSize: '13px', color: '#8b949e', textAlign: 'center', margin: '0 0 32px 0', lineHeight: '1.5' }}>AI-powered Impact Analyzer &<br />Documentation for Salesforce orgs</p>
         <button onClick={handleConnect} disabled={connecting} style={{ width: '100%', padding: '14px', background: connecting ? '#1a3a5c' : 'linear-gradient(135deg, #00a1e0, #032d60)', color: '#ffffff', border: 'none', borderRadius: '10px', fontSize: '15px', fontWeight: '600', cursor: connecting ? 'not-allowed' : 'pointer' }}>
           {connecting ? 'Connecting...' : '🔗 Connect to Salesforce'}
         </button>
+        {orgChoices.length > 0 && (
+          <div style={{ width: '100%', marginTop: '12px' }}>
+            <div style={{ fontSize: '11px', color: '#8b949e', marginBottom: '6px' }}>You are logged in to {orgChoices.length} orgs. Pick one:</div>
+            <div style={{ maxHeight: '130px', overflowY: 'auto' }}>
+              {orgChoices.map(o => (
+                <div key={o.instanceUrl} onClick={() => connectSession(o)} style={{ padding: '8px 10px', background: '#161b22', border: '1px solid #21262d', borderRadius: '6px', marginBottom: '4px', fontSize: '11px', color: '#00a1e0', cursor: 'pointer', wordBreak: 'break-all' }}>
+                  {o.instanceUrl.replace('https://', '')}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {connectError && (
+          <div style={{ width: '100%', boxSizing: 'border-box', marginTop: '12px', padding: '10px 12px', background: '#cf222e22', border: '1px solid #cf222e44', borderRadius: '8px', fontSize: '11px', color: '#ff7b72', lineHeight: '1.5' }}>⚠️ {connectError}</div>
+        )}
+        <p style={{ fontSize: '10px', color: '#484f58', textAlign: 'center', margin: '16px 0 0 0', lineHeight: '1.5' }}>
+          Uses the Salesforce login already open in this browser. Read-only. Metadata you choose to analyze is sent to Anthropic using your own API key.{' '}
+          <a href="https://github.com/saikumar-cloud/sf-doc-studio/blob/main/PRIVACY.md" target="_blank" rel="noreferrer" style={{ color: '#8b949e' }}>Privacy policy</a>
+        </p>
       </div>
     )
   }
@@ -760,6 +791,18 @@ Object stats:
             {apiKey && <div style={{ fontSize: '11px', color: '#238636', marginTop: '6px' }}>✅ API key is set</div>}
           </div>
 
+          {/* Model */}
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{ fontSize: '12px', fontWeight: '700', color: '#8b949e', marginBottom: '8px' }}>CLAUDE MODEL (OPTIONAL)</div>
+            <div style={{ fontSize: '11px', color: '#484f58', marginBottom: '8px' }}>Leave blank to use the default (claude-sonnet-4-6).</div>
+            <input
+              value={model}
+              onChange={e => { setModel(e.target.value); chrome.storage.local.set({ anthropicModel: e.target.value.trim() }) }}
+              placeholder="claude-sonnet-4-6"
+              style={{ width: '100%', padding: '10px 12px', background: '#1a2332', border: '1px solid #30363d', borderRadius: '8px', color: '#fff', fontSize: '13px', boxSizing: 'border-box', outline: 'none' }}
+            />
+          </div>
+
           {/* Connection */}
           <div style={{ marginBottom: '24px' }}>
             <div style={{ fontSize: '12px', fontWeight: '700', color: '#8b949e', marginBottom: '8px' }}>SALESFORCE CONNECTION</div>
@@ -773,6 +816,8 @@ Object stats:
               setAccessToken('')
               setInstanceUrl('')
               setApiKey('')
+              setModel('')
+              setObjects([])
               setView('objects')
             }} style={{ width: '100%', padding: '10px', borderRadius: '8px', background: '#21262d', color: '#cf222e', border: '1px solid #cf222e44', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>
               🔌 Disconnect & Clear All Data
@@ -784,8 +829,10 @@ Object stats:
             <div style={{ fontSize: '12px', fontWeight: '700', color: '#8b949e', marginBottom: '8px' }}>ABOUT</div>
             <div style={{ padding: '12px', background: '#161b22', borderRadius: '8px', border: '1px solid #21262d' }}>
               <div style={{ fontSize: '13px', fontWeight: '600', marginBottom: '4px' }}>⚡ SF Doc Studio</div>
-              <div style={{ fontSize: '11px', color: '#8b949e', marginBottom: '2px' }}>Version 0.1.0</div>
-              <div style={{ fontSize: '11px', color: '#8b949e' }}>AI-powered Salesforce documentation & impact analysis</div>
+              <div style={{ fontSize: '11px', color: '#8b949e', marginBottom: '2px' }}>Version {chrome.runtime.getManifest().version}</div>
+              <div style={{ fontSize: '11px', color: '#8b949e', marginBottom: '6px' }}>AI-powered Salesforce documentation & impact analysis</div>
+              <div style={{ fontSize: '10px', color: '#484f58', marginBottom: '6px' }}>Not affiliated with or endorsed by Salesforce or Anthropic.</div>
+              <a href="https://github.com/saikumar-cloud/sf-doc-studio/blob/main/PRIVACY.md" target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: '#00a1e0' }}>Privacy policy</a>
             </div>
           </div>
 
