@@ -1,13 +1,14 @@
 {
   "name": "sf-doc-studio",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && cp public/background.js dist/background.js",
+    "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "package": "npm run build && node scripts/zip.mjs"
   },
   "dependencies": {
     "react": "^19.2.7",

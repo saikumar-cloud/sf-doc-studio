@@ -26,6 +26,11 @@ export interface DependencySummary {
   total: number
 }
 
+// Escape a value for use inside a SOQL string literal.
+function q(value: string): string {
+  return String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+}
+
 function sfFetch(instanceUrl: string, accessToken: string, path: string) {
   return fetch(`${instanceUrl}${path}`, {
     headers: { Authorization: `Bearer ${accessToken}` }
@@ -46,13 +51,15 @@ function toolingQueryViaBackground(instanceUrl: string, accessToken: string, soq
 
 export async function fetchObjects(instanceUrl: string, accessToken: string): Promise<SFObject[]> {
   const r = await sfFetch(instanceUrl, accessToken, '/services/data/v62.0/sobjects/')
+  if (r.status === 401) throw new Error('TOKEN_EXPIRED')
   if (!r.ok) throw new Error(`${r.status}`)
   const d = await r.json()
   return d.sobjects
 }
 
 export async function fetchObjectDetail(instanceUrl: string, accessToken: string, objectName: string): Promise<{fields: SFField[]}> {
-  const r = await sfFetch(instanceUrl, accessToken, `/services/data/v62.0/sobjects/${objectName}/describe/`)
+  const r = await sfFetch(instanceUrl, accessToken, `/services/data/v62.0/sobjects/${encodeURIComponent(objectName)}/describe/`)
+  if (r.status === 401) throw new Error('TOKEN_EXPIRED')
   if (!r.ok) throw new Error(`${r.status}`)
   const d = await r.json()
   return { fields: d.fields }
@@ -68,20 +75,19 @@ export async function fetchFieldDependenciesSummary(
 
   // Try custom object first
   const objRecords = await toolingQueryViaBackground(instanceUrl, accessToken,
-    `SELECT Id FROM CustomObject WHERE DeveloperName='${objectName.replace(/__c$/,'')}' LIMIT 1`)
+    `SELECT Id FROM CustomObject WHERE DeveloperName='${q(objectName.replace(/__c$/,''))}' LIMIT 1`)
 
   if (objRecords.length > 0) {
     const tableId = objRecords[0].Id
     const fieldRecords = await toolingQueryViaBackground(instanceUrl, accessToken,
-      `SELECT Id FROM CustomField WHERE TableEnumOrId='${tableId}' AND DeveloperName='${devName}' LIMIT 1`)
+      `SELECT Id FROM CustomField WHERE TableEnumOrId='${tableId}' AND DeveloperName='${q(devName)}' LIMIT 1`)
     if (fieldRecords.length > 0) fieldId = fieldRecords[0].Id
   }
 
   // Fallback for standard objects (Account, Contact, etc.)
   if (!fieldId) {
-    console.log('Standard object fallback for:', objectName, devName)
     const fieldRecords = await toolingQueryViaBackground(instanceUrl, accessToken,
-      `SELECT Id FROM CustomField WHERE TableEnumOrId='${objectName}' AND DeveloperName='${devName}' LIMIT 1`)
+      `SELECT Id FROM CustomField WHERE TableEnumOrId='${q(objectName)}' AND DeveloperName='${q(devName)}' LIMIT 1`)
     if (fieldRecords.length > 0) fieldId = fieldRecords[0].Id
   }
 
@@ -92,7 +98,7 @@ export async function fetchFieldDependenciesSummary(
   }
   if (deps.length === 0) {
     deps = await toolingQueryViaBackground(instanceUrl, accessToken,
-      `SELECT MetadataComponentId,MetadataComponentName,MetadataComponentType FROM MetadataComponentDependency WHERE RefMetadataComponentName='${objectName}.${fieldName}' LIMIT 200`)
+      `SELECT MetadataComponentId,MetadataComponentName,MetadataComponentType FROM MetadataComponentDependency WHERE RefMetadataComponentName='${q(objectName)}.${q(fieldName)}' LIMIT 200`)
   }
 
   const all = deps.map((r:any) => ({
@@ -142,7 +148,7 @@ export async function fetchObjectSummary(
   // Get object ID - try custom object first
   let tableId: string | null = null
   const objRecords = await toolingQueryViaBackground(instanceUrl, accessToken,
-    `SELECT Id FROM CustomObject WHERE DeveloperName='${objectName.replace(/__c$/,'')}' LIMIT 1`)
+    `SELECT Id FROM CustomObject WHERE DeveloperName='${q(objectName.replace(/__c$/,''))}' LIMIT 1`)
   if (objRecords.length > 0) tableId = objRecords[0].Id
 
   let deps: any[] = []
@@ -155,13 +161,13 @@ export async function fetchObjectSummary(
   // Fallback for standard objects - query by name
   if (deps.length === 0) {
     deps = await toolingQueryViaBackground(instanceUrl, accessToken,
-      `SELECT MetadataComponentId,MetadataComponentName,MetadataComponentType FROM MetadataComponentDependency WHERE RefMetadataComponentName='${objectName}' LIMIT 200`)
+      `SELECT MetadataComponentId,MetadataComponentName,MetadataComponentType FROM MetadataComponentDependency WHERE RefMetadataComponentName='${q(objectName)}' LIMIT 200`)
   }
   
   // Another fallback - query by entity definition
   if (deps.length === 0) {
     const entityRecords = await toolingQueryViaBackground(instanceUrl, accessToken,
-      `SELECT DurableId FROM EntityDefinition WHERE QualifiedApiName='${objectName}' LIMIT 1`)
+      `SELECT DurableId FROM EntityDefinition WHERE QualifiedApiName='${q(objectName)}' LIMIT 1`)
     if (entityRecords.length > 0) {
       const durableId = entityRecords[0].DurableId
       deps = await toolingQueryViaBackground(instanceUrl, accessToken,
@@ -173,7 +179,6 @@ export async function fetchObjectSummary(
   const flowApiRecords = await toolingQueryViaBackground(instanceUrl, accessToken,
     `SELECT Id, MasterLabel, ProcessType FROM Flow WHERE Status='Active' AND (ProcessType='Flow' OR ProcessType='AutoLaunchedFlow' OR ProcessType='RecordTriggeredFlow') LIMIT 200`)
   
-  console.log('Active flows in org:', flowApiRecords.length)
   
   const existingIds = new Set(deps.map((d:any) => d.MetadataComponentId))
 
@@ -187,7 +192,7 @@ export async function fetchObjectSummary(
   } else {
     // Standard object - get entity DurableId for fields
     const entityRecs = await toolingQueryViaBackground(instanceUrl, accessToken,
-      `SELECT DurableId FROM EntityDefinition WHERE QualifiedApiName='${objectName}' LIMIT 1`)
+      `SELECT DurableId FROM EntityDefinition WHERE QualifiedApiName='${q(objectName)}' LIMIT 1`)
     if (entityRecs.length > 0) {
       const fieldRecs = await toolingQueryViaBackground(instanceUrl, accessToken,
         `SELECT Id FROM CustomField WHERE TableEnumOrId='${entityRecs[0].DurableId}' LIMIT 200`)
@@ -195,7 +200,6 @@ export async function fetchObjectSummary(
     }
   }
 
-  console.log('Field IDs found for object:', fieldIds.length)
 
   // Query dependencies for all fields in batches of 10
   for (let i = 0; i < Math.min(fieldIds.length, 50); i += 10) {
@@ -211,22 +215,18 @@ export async function fetchObjectSummary(
     })
   }
 
-  console.log('Total deps after field scan:', deps.length)
 
   // Try FlowStart table (record-triggered flows)
   const flowStartRecords = await toolingQueryViaBackground(instanceUrl, accessToken,
-    `SELECT FlowVersionId FROM FlowStart WHERE ObjectApiName='${objectName}' LIMIT 50`)
-  console.log('FlowStart records:', flowStartRecords.length)
+    `SELECT FlowVersionId FROM FlowStart WHERE ObjectApiName='${q(objectName)}' LIMIT 50`)
 
   // Try FlowRecordLookup table
   const flowLookupRecords = await toolingQueryViaBackground(instanceUrl, accessToken,
-    `SELECT FlowVersionId FROM FlowRecordLookup WHERE ObjectApiName='${objectName}' LIMIT 50`)
-  console.log('FlowRecordLookup records:', flowLookupRecords.length)
+    `SELECT FlowVersionId FROM FlowRecordLookup WHERE ObjectApiName='${q(objectName)}' LIMIT 50`)
 
   // Try FlowRecordCreate table  
   const flowCreateRecords = await toolingQueryViaBackground(instanceUrl, accessToken,
-    `SELECT FlowVersionId FROM FlowRecordCreate WHERE ObjectApiName='${objectName}' LIMIT 50`)
-  console.log('FlowRecordCreate records:', flowCreateRecords.length)
+    `SELECT FlowVersionId FROM FlowRecordCreate WHERE ObjectApiName='${q(objectName)}' LIMIT 50`)
 
   const allFlowVersionIds = new Set([
     ...flowStartRecords.map((f:any) => f.FlowVersionId),
@@ -234,7 +234,6 @@ export async function fetchObjectSummary(
     ...flowCreateRecords.map((f:any) => f.FlowVersionId)
   ])
 
-  console.log('Unique flow version IDs:', allFlowVersionIds.size)
 
   flowApiRecords.forEach((flow:any) => {
     if (allFlowVersionIds.has(flow.Id) && !existingIds.has(flow.Id)) {
@@ -274,7 +273,7 @@ export async function fetchApexClassBody(
   className: string
 ): Promise<string> {
   const records = await toolingQueryViaBackground(instanceUrl, accessToken,
-    `SELECT Id, Body, LengthWithoutComments FROM ApexClass WHERE Name='${className}' LIMIT 1`)
+    `SELECT Id, Body, LengthWithoutComments FROM ApexClass WHERE Name='${q(className)}' LIMIT 1`)
   if (records.length === 0) return ''
   return records[0].Body || ''
 }
@@ -285,7 +284,7 @@ export async function fetchApexTriggerBody(
   triggerName: string
 ): Promise<string> {
   const records = await toolingQueryViaBackground(instanceUrl, accessToken,
-    `SELECT Id, Body FROM ApexTrigger WHERE Name='${triggerName}' LIMIT 1`)
+    `SELECT Id, Body FROM ApexTrigger WHERE Name='${q(triggerName)}' LIMIT 1`)
   if (records.length === 0) return ''
   return records[0].Body || ''
 }
@@ -297,12 +296,12 @@ export async function fetchFlowDetails(
 ): Promise<string> {
   // Get flow version ID
   const records = await toolingQueryViaBackground(instanceUrl, accessToken,
-    `SELECT Id, MasterLabel, Description, ProcessType, TriggerType FROM Flow WHERE MasterLabel='${flowName}' AND Status='Active' LIMIT 1`)
+    `SELECT Id, MasterLabel, Description, ProcessType, TriggerType FROM Flow WHERE MasterLabel='${q(flowName)}' AND Status='Active' LIMIT 1`)
   
   let flow = records[0]
   if (!flow) {
     const allRecords = await toolingQueryViaBackground(instanceUrl, accessToken,
-      `SELECT Id, MasterLabel, Description, ProcessType, Status FROM Flow WHERE MasterLabel='${flowName}' LIMIT 1`)
+      `SELECT Id, MasterLabel, Description, ProcessType, Status FROM Flow WHERE MasterLabel='${q(flowName)}' LIMIT 1`)
     if (allRecords.length === 0) return flowName
     flow = allRecords[0]
   }
@@ -344,6 +343,8 @@ Class Name: ${className}
 Apex Code:
 \`\`\`apex
 ${body}
+\`\`\`
+
 Answer in this exact format. Be brief but specific. Reference actual names from code.
 
 **PURPOSE:** [2 sentences. What it does and when it runs.]
@@ -457,7 +458,7 @@ export async function fetchValidationRule(
   objectName: string
 ): Promise<string> {
   const records = await toolingQueryViaBackground(instanceUrl, accessToken,
-    `SELECT Id, ValidationName, Description, ErrorMessage, ErrorDisplayField, Active FROM ValidationRule WHERE EntityDefinition.QualifiedApiName='${objectName}' AND ValidationName='${ruleName}' LIMIT 1`)
+    `SELECT Id, ValidationName, Description, ErrorMessage, ErrorDisplayField, Active FROM ValidationRule WHERE EntityDefinition.QualifiedApiName='${q(objectName)}' AND ValidationName='${q(ruleName)}' LIMIT 1`)
   if (records.length === 0) return JSON.stringify({ ValidationName: ruleName })
   
   const rule = records[0]
@@ -487,7 +488,7 @@ export async function fetchSaveSequence(
   // For custom objects, get the object ID first
   let triggerId = objectName
   const objRecords = await toolingQueryViaBackground(instanceUrl, accessToken,
-    `SELECT Id FROM CustomObject WHERE DeveloperName='${objectName.replace(/__c$/,'')}' LIMIT 1`)
+    `SELECT Id FROM CustomObject WHERE DeveloperName='${q(objectName.replace(/__c$/,''))}' LIMIT 1`)
   if (objRecords.length > 0) triggerId = objRecords[0].Id
 
   // Fetch all components in parallel
@@ -498,9 +499,9 @@ export async function fetchSaveSequence(
     toolingQueryViaBackground(instanceUrl, accessToken,
       `SELECT Id, MasterLabel, ProcessType, Status FROM Flow WHERE (ProcessType='AutoLaunchedFlow' OR ProcessType='RecordTriggeredFlow') AND Status='Active' LIMIT 50`),
     toolingQueryViaBackground(instanceUrl, accessToken,
-      `SELECT Id, ValidationName, Active FROM ValidationRule WHERE EntityDefinition.QualifiedApiName='${objectName}' AND Active=true LIMIT 20`),
+      `SELECT Id, ValidationName, Active FROM ValidationRule WHERE EntityDefinition.QualifiedApiName='${q(objectName)}' AND Active=true LIMIT 20`),
     toolingQueryViaBackground(instanceUrl, accessToken,
-      `SELECT Id, Name FROM WorkflowRule WHERE SobjectType='${objectName}' LIMIT 20`)
+      `SELECT Id, Name FROM WorkflowRule WHERE SobjectType='${q(objectName)}' LIMIT 20`)
   ])
 
   // Filter triggers for this object by API name or object ID
@@ -636,7 +637,6 @@ export async function fetchOmniStudioComponents(
     safe(toolingQueryViaBackground(instanceUrl, accessToken,
       `SELECT Id, Name, IsActive__c FROM OmniUiCard__c WHERE IsActive__c=true LIMIT 50`))
   ])
-  console.log('OmniStudio:', omniScripts.length, 'scripts,', dataRaptors.length, 'DRs,', integrationProcedures.length, 'IPs,', flexCards.length, 'cards')
   return { omniScripts, dataRaptors, integrationProcedures, flexCards }
 }
 
@@ -715,7 +715,7 @@ Give a concise, practical risk assessment.`
         const poll = setInterval(() => {
           attempts++
           chrome.storage.local.get(key, (result) => {
-            const data = result[key] as {done?: boolean, text?: string, error?: string} | undefined as {done?: boolean, text?: string, error?: string} | undefined as {done?: boolean, text?: string, error?: string} | undefined
+            const data = result[key] as {done?: boolean, text?: string, error?: string} | undefined
             if (data?.done) {
               clearInterval(poll)
               chrome.storage.local.remove(key)
