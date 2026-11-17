@@ -26,6 +26,9 @@ WHAT IT DOES
 • Save sequence: see what runs, and in what order, when a record is saved
 • Export: generate a printable documentation report for an object (save as PDF)
 • OmniStudio: list and explain OmniScripts, DataRaptors, Integration Procedures, and FlexCards
+• Query Editor: run SOQL, see results in a table, export to CSV
+• Plain-English queries: type "show open cases older than a year" and AI drafts the query for you
+• Data changes: UPDATE, DELETE, INSERT and UPSERT with a preview of every affected record before anything changes, and an extra confirmation in production orgs
 
 HOW IT WORKS
 1. Log in to Salesforce in Chrome as usual, then click the extension and press Connect. No extra sign-in, no connected app, no admin setup. Works with production orgs and sandboxes
@@ -33,7 +36,8 @@ HOW IT WORKS
 3. Browse objects and click "explain" on anything
 
 PRIVACY
-• Read-only: the extension never changes anything in your org
+• Safe by design: data only changes after you preview the affected records and confirm. Production orgs need an extra typed confirmation
+• AI only sees your request and field names, never record data
 • No servers, no analytics, no tracking. By default AI runs on your own computer; your data goes to Anthropic only if you paste a prompt into Claude or add your own API key
 • Uses the Salesforce login already open in your browser; your session is never stored or sent anywhere except your own org
 • An optional API key stays in your browser and can be cleared any time in Settings
@@ -52,14 +56,14 @@ SF Doc Studio is an independent project and is not affiliated with or endorsed b
 ## Privacy practices tab
 
 **Single purpose:**
-SF Doc Studio documents and analyzes the metadata of a Salesforce org the user connects to: it lists objects, fields, and automations, shows what depends on a field, and generates AI explanations of that metadata.
+SF Doc Studio helps Salesforce admins and developers understand and work with the org they connect to: it documents objects, fields and automations, shows what depends on a field, explains metadata with AI, and provides a query editor to read and, after explicit confirmation, change records.
 
 **Permission justifications:**
 
 - `cookies`: Used only to read the Salesforce session cookie ("sid") on the user's own *.my.salesforce.com domain when they click Connect, so the extension can call the Salesforce API as the already-logged-in user. No other cookies are read, and the value is sent only to that Salesforce org.
 - `sidePanel`: The extension's interface is shown in Chrome's side panel so it stays open next to Salesforce while the user switches tabs. It is opened only when the user clicks the toolbar icon.
 - `storage`: Stores the connected org's URL, the user's optional Anthropic API key, and model preference, and the most recently exported report locally so they do not have to re-enter them each time the popup opens.
-- Host permission `https://*.salesforce.com/*`: Required to read the session cookie described above and to call the Salesforce REST and Tooling APIs on the user's own org domain (for example acme.my.salesforce.com) to read object, field, and automation metadata. The subdomain differs for every customer, so a wildcard is needed.
+- Host permission `https://*.salesforce.com/*`: Required to read the session cookie described above and to call the Salesforce REST and Tooling APIs on the user's own org domain (for example acme.my.salesforce.com): to read object, field and automation metadata, to run the user's own queries, and to apply data changes the user previews and confirms in the Query Editor. The subdomain differs for every customer, so a wildcard is needed.
 - Content script on `https://*.lightning.force.com/*`, `https://*.my.salesforce.com/*`, `https://*.my.salesforce-setup.com/*`: Adds a small button on the edge of Salesforce pages that opens the extension's side panel when clicked. The script does not read or modify page content, and the button can be disabled in Settings.
 - Host permission `https://api.anthropic.com/*`: Used only when the user adds their own Anthropic API key, to send the metadata they choose to analyze to the Anthropic API. By default explanations run on Chrome's built-in on-device AI instead.
 
@@ -67,7 +71,8 @@ SF Doc Studio documents and analyzes the metadata of a Salesforce org the user c
 
 **Data usage - check these boxes:**
 - Authentication information (the Salesforce session cookie is read and used in memory; the Anthropic API key is stored locally)
-- Website content (Salesforce metadata, including Apex source code, is read and sent to Anthropic at the user's request)
+- Website content (Salesforce metadata and, in the Query Editor, records the user queries; metadata may be sent to Anthropic at the user's request)
+- Personally identifiable information (only if the user's own queries return records containing it, such as contact names; shown locally and never sent to the developer or to AI)
 
 **Certify all three disclosures:**
 - I do not sell or transfer user data to third parties, outside of the approved use cases

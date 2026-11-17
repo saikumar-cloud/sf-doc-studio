@@ -8,6 +8,9 @@ AI-powered Salesforce documentation and impact analyzer Chrome extension.
 - Save Sequence visualizer
 - Impact analyzer with risk scoring
 - Export to PDF
+- Query Editor: SOQL with results table and CSV export
+- Plain-English queries drafted by AI
+- UPDATE, DELETE, INSERT, UPSERT with preview and confirmation (extra confirmation in production)
 - OmniStudio support
 - No sign-in setup: uses the Salesforce login already open in your browser (production and sandbox)
 
@@ -25,7 +28,7 @@ AI-powered Salesforce documentation and impact analyzer Chrome extension.
 `npm run package` builds the extension and creates `sf-doc-studio-<version>.zip` with `manifest.json` at the zip root, ready to upload. Listing text and permission justifications are in [STORE_LISTING.md](STORE_LISTING.md).
 
 ## Privacy
-See [PRIVACY.md](PRIVACY.md). The extension is read-only and has no backend.
+See [PRIVACY.md](PRIVACY.md). The extension has no backend. It changes data only when you run and confirm a data change in the Query Editor.
 
 ## License
 MIT - Built by Sai Kumar Pallerla

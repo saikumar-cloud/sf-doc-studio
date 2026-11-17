@@ -43,7 +43,7 @@ function Markdown({ text }: { text: string }) {
   )
 }
 
-function OpenInClaudeCard({ prompt, reason }: { prompt: string, reason: FallbackReason }) {
+function OpenInClaudeCard({ prompt, reason, purpose }: { prompt: string, reason: FallbackReason, purpose: 'explain' | 'query' }) {
   const [copied, setCopied] = useState<boolean | null>(null)
   const [progress, setProgress] = useState<number | null>(null)
   const [setupDone, setSetupDone] = useState(false)
@@ -73,11 +73,13 @@ function OpenInClaudeCard({ prompt, reason }: { prompt: string, reason: Fallback
         </div>
       )}
       {setupDone && (
-        <div style={{ color: '#3fb950', marginBottom: '12px' }}>✅ Free AI is ready. Go back and click explain again.</div>
+        <div style={{ color: '#3fb950', marginBottom: '12px' }}>✅ Free AI is ready. Try again.</div>
       )}
 
       <div style={{ marginBottom: '8px' }}>
-        {reason === 'not_ready' ? 'Or get' : 'Get'} the full explanation free in Claude: we copy the prompt and open Claude, then you paste it with <strong>Ctrl+V</strong> (<strong>⌘V</strong> on Mac).
+        {purpose === 'query'
+          ? <>{reason === 'not_ready' ? 'Or get' : 'Get'} the statement free from Claude: we copy the request and open Claude. Paste it with <strong>Ctrl+V</strong> (<strong>⌘V</strong> on Mac), then copy Claude's statement back into the editor here.</>
+          : <>{reason === 'not_ready' ? 'Or get' : 'Get'} the full explanation free in Claude: we copy the prompt and open Claude, then you paste it with <strong>Ctrl+V</strong> (<strong>⌘V</strong> on Mac).</>}
       </div>
       <button
         onClick={async () => setCopied(await openInClaude(prompt))}
@@ -91,9 +93,9 @@ function OpenInClaudeCard({ prompt, reason }: { prompt: string, reason: Fallback
 }
 
 // Renders an AI answer, an "Open in Claude" fallback, or an error message.
-export default function AIText({ text }: { text: string }) {
+export default function AIText({ text, purpose = 'explain' }: { text: string, purpose?: 'explain' | 'query' }) {
   const fb = parseFallback(text)
-  if (fb) return <OpenInClaudeCard prompt={fb.prompt} reason={fb.reason} />
+  if (fb) return <OpenInClaudeCard prompt={fb.prompt} reason={fb.reason} purpose={purpose} />
   if (text.startsWith('Failed:')) return <div style={{ textAlign: 'left', fontSize: '12px', color: '#ff7b72', wordBreak: 'break-word' }}>{text}</div>
   return <Markdown text={text} />
 }

@@ -11,8 +11,9 @@ import { generateHtmlReport } from './services/salesforce/reportGenerator'
 import { fetchOmniStudioComponents, explainOmniComponent } from './services/salesforce/metadata'
 import { aiErrorText, activeEngine, enableChromeAI, AIUnavailableError } from './services/ai'
 import AIText from './components/AIText'
+import QueryEditor from './components/QueryEditor'
 
-type View = 'objects' | 'object-doc' | 'fields' | 'impact' | 'settings' | 'omni'
+type View = 'objects' | 'object-doc' | 'fields' | 'impact' | 'settings' | 'omni' | 'query'
 
 function App() {
   const [connecting, setConnecting] = useState(false)
@@ -42,6 +43,8 @@ function App() {
   const [apiKey, setApiKey] = useState('')
   const [aiEngine, setAiEngine] = useState<string>('')
   const [aiSetupProgress, setAiSetupProgress] = useState<number | null>(null)
+  const [queryContext, setQueryContext] = useState<string | undefined>(undefined)
+  const [queryReturn, setQueryReturn] = useState<View>('objects')
   const [activeTab, setActiveTab] = useState<'overview'|'fields'|'save-sequence'>('overview')
   const [selectedComponent, setSelectedComponent] = useState<{name:string, type:string} | null>(null)
   const [saveSequence, setSaveSequence] = useState('')
@@ -370,7 +373,7 @@ Object stats:
           <div style={{ width: '100%', boxSizing: 'border-box', marginTop: '12px', padding: '10px 12px', background: '#cf222e22', border: '1px solid #cf222e44', borderRadius: '8px', fontSize: '11px', color: '#ff7b72', lineHeight: '1.5' }}>⚠️ {connectError}</div>
         )}
         <p style={{ fontSize: '10px', color: '#484f58', textAlign: 'center', margin: '16px 0 0 0', lineHeight: '1.5' }}>
-          Uses the Salesforce login already open in this browser. Read-only. Metadata you choose to analyze is sent to Anthropic using your own API key.{' '}
+          Uses the Salesforce login already open in this browser. Data changes only happen after you preview and confirm them. AI runs on your device by default.{' '}
           <a href="https://github.com/saikumar-cloud/sf-doc-studio/blob/main/PRIVACY.md" target="_blank" rel="noreferrer" style={{ color: '#8b949e' }}>Privacy policy</a>
         </p>
       </div>
@@ -580,6 +583,14 @@ Object stats:
                 </div>
               )}
 
+              <button onClick={() => { setQueryContext(selectedObject.name); setQueryReturn('object-doc'); setView('query') }} style={{
+                width: '100%', padding: '9px', borderRadius: '8px', background: '#161b22',
+                color: '#58a6ff', border: '1px solid #1f6feb55', cursor: 'pointer',
+                fontSize: '12px', fontWeight: '600', marginBottom: '12px'
+              }}>
+                🔎 Query {selectedObject.label} records
+              </button>
+
               {/* Automations */}
               {loadingObjSummary ? (
                 <div style={{ textAlign: 'center', padding: '20px', color: '#8b949e', fontSize: '12px' }}>🔍 Scanning automations...</div>
@@ -671,6 +682,22 @@ Object stats:
           )}
         </div>
       </div>
+    )
+  }
+
+  // Query Editor View
+  if (view === 'query') {
+    return (
+      <QueryEditor
+        key={queryContext || 'all'}
+        instanceUrl={instanceUrl}
+        accessToken={accessToken}
+        apiKey={apiKey}
+        objects={objects}
+        contextObject={queryContext}
+        onBack={() => setView(queryReturn)}
+        onExpired={handleTokenExpired}
+      />
     )
   }
 
@@ -876,6 +903,7 @@ Object stats:
           <div style={{ fontSize: '13px', fontWeight: '700' }}>SF Doc Studio</div>
           <div style={{ fontSize: '11px', color: '#00c851' }}>● Connected</div>
         </div>
+        <button onClick={() => { setQueryContext(undefined); setQueryReturn('objects'); setView('query') }} style={{ background: 'none', border: '1px solid #30363d', borderRadius: '4px', color: '#8b949e', cursor: 'pointer', fontSize: '10px', padding: '3px 6px' }}>Query</button>
         <button onClick={() => { setView('omni'); setLoadingOmni(true); fetchOmniStudioComponents(instanceUrl, accessToken).then(setOmniComponents).catch(console.error).finally(() => setLoadingOmni(false)) }} style={{ background: 'none', border: '1px solid #30363d', borderRadius: '4px', color: '#8b949e', cursor: 'pointer', fontSize: '10px', padding: '3px 6px' }}>OmniStudio</button>
         <button onClick={() => setView('settings')} style={{ background: 'none', border: 'none', color: '#8b949e', cursor: 'pointer', fontSize: '18px', padding: '0' }}>⚙️</button>
       </div>
