@@ -2,7 +2,7 @@
 // Only the user's request and object/field names (schema) are given to the AI, never record data.
 
 import { askAI } from '../ai'
-import { describeObject, type FieldInfo } from './data'
+import { describeFull, repairSoql, type FieldInfo } from './data'
 import type { SFObject } from './metadata'
 
 const NOISE = /(History|Share|Feed|ChangeEvent|__Tag|__mdt|__e|__x)$/
@@ -39,6 +39,9 @@ export function matchObjects(request: string, objects: SFObject[], max = 2): SFO
 
 function fieldLine(f: FieldInfo): string {
   let line = `${f.name} (${f.type}${f.label && f.label !== f.name ? ', "' + f.label + '"' : ''})`
+  if (f.type === 'reference' && f.referenceTo?.length) {
+    line += ` -> lookup to ${f.referenceTo.join('/')}${f.relationshipName ? `, use ${f.relationshipName}.Name for its name` : ''}`
+  }
   if (f.type === 'picklist' && f.picklistValues?.length) {
     const vals = f.picklistValues.filter(v => v.active).slice(0, 10).map(v => `'${v.value}'`)
     if (vals.length) line += ` values: ${vals.join(', ')}`
@@ -54,10 +57,19 @@ export async function buildNlPrompt(
   if (!matched.length) {
     throw new Error('Mention which object you mean, for example "accounts", "open cases" or "Batch Job Log records".')
   }
+  const matchedNames = new Set(matched.map(o => o.name))
   const schemas: string[] = []
+  const relations: string[] = []
   for (const o of matched) {
-    const fields = await describeObject(instanceUrl, token, o.name)
-    schemas.push(`Object ${o.name} ("${o.label}") fields:\n` + fields.slice(0, 120).map(f => '- ' + fieldLine(f)).join('\n'))
+    const { fields, childRelationships } = await describeFull(instanceUrl, token, o.name)
+    // Lookups first, then the rest, so relationships survive the field cap.
+    const sorted = [...fields.filter(f => f.type === 'reference'), ...fields.filter(f => f.type !== 'reference')]
+    schemas.push(`Object ${o.name} ("${o.label}") fields:\n` + sorted.slice(0, 120).map(f => '- ' + fieldLine(f)).join('\n'))
+    for (const c of childRelationships) {
+      if (matchedNames.has(c.childSObject) && c.childSObject !== o.name) {
+        relations.push(`- ${c.childSObject}.${c.field} points to ${o.name}. ${o.name} records that have ${c.childSObject} records: WHERE Id IN (SELECT ${c.field} FROM ${c.childSObject})${c.relationshipName ? `. Child subquery name: ${c.relationshipName}` : ''}`)
+      }
+    }
   }
   const today = new Date().toISOString().slice(0, 10)
   const prompt = `You convert a Salesforce user's request into exactly ONE statement. Today is ${today}.
@@ -69,15 +81,32 @@ Allowed statement forms:
 4. INSERT INTO Object (Field1, Field2) VALUES ('text', 123), ('text2', 456)
 5. UPSERT INTO Object (ExternalIdField, Field2) VALUES ('id1', 'x') ON ExternalIdField
 
-Rules:
-- Use only the objects and API field names listed below. Never invent fields.
+SOQL rules (SOQL is not SQL):
+- Text search uses LIKE with % wildcards: Name LIKE '%Acc%'. There is no CONTAINS, ILIKE, SELECT * or JOIN.
+- "records that have related X" uses a semi-join: WHERE Id IN (SELECT ParentLookupField FROM X). "that have no X" uses NOT IN.
+- Parent fields use dot notation: Account.Name. Child records use a subquery in SELECT: (SELECT Id, Name FROM Contacts).
 - Text values in single quotes. Numbers, true, false and null without quotes.
-- In WHERE clauses use SOQL syntax, including date literals like LAST_N_DAYS:365, THIS_MONTH, TODAY.
+- Date literals: TODAY, LAST_N_DAYS:365, THIS_MONTH, THIS_YEAR.
+- Counting: SELECT COUNT() FROM Case, or SELECT Status, COUNT(Id) FROM Case GROUP BY Status.
 - UPDATE and DELETE must have a WHERE clause.
-- For "show", "list", "find", "how many" requests, write a SELECT. Include Id and a few useful fields. Add LIMIT 200 unless the user asks for a count or a specific number.
-- Output only the statement. No explanation, no markdown, no code fences.
+- For "show", "list", "find" requests write a SELECT with Id, Name (if the object has Name) and a few useful fields, and LIMIT 200 unless a count or number is asked for.
+- Use only the objects and API field names listed below. Never invent fields.
+
+Examples (syntax only; they may use other objects):
+Request: accounts whose name has "Acme" and that have contacts
+Statement: SELECT Id, Name FROM Account WHERE Name LIKE '%Acme%' AND Id IN (SELECT AccountId FROM Contact) LIMIT 200
+Request: accounts with no opportunities
+Statement: SELECT Id, Name FROM Account WHERE Id NOT IN (SELECT AccountId FROM Opportunity) LIMIT 200
+Request: contacts with their account name created this year
+Statement: SELECT Id, Name, Account.Name FROM Contact WHERE CreatedDate = THIS_YEAR LIMIT 200
+Request: accounts with their contacts
+Statement: SELECT Id, Name, (SELECT Id, Name FROM Contacts) FROM Account LIMIT 200
+Request: how many open cases by priority
+Statement: SELECT Priority, COUNT(Id) FROM Case WHERE IsClosed = false GROUP BY Priority
 
 ${schemas.join('\n\n')}
+${relations.length ? '\nRelationships between these objects:\n' + relations.join('\n') + '\n' : ''}
+Output only the statement. No explanation, no markdown, no code fences.
 
 Request: ${request}
 Statement:`
@@ -99,5 +128,16 @@ export async function naturalLanguageToStatement(
   instanceUrl: string, token: string, request: string, objects: SFObject[], apiKey: string, fallbackObject?: string
 ): Promise<string> {
   const { prompt } = await buildNlPrompt(instanceUrl, token, request, objects, fallbackObject)
-  return cleanStatement(await askAI(prompt, apiKey))
+  return repairSoql(cleanStatement(await askAI(prompt, apiKey)))
+}
+
+// Second try: give the AI the statement Salesforce rejected and the error message.
+export async function fixStatement(
+  instanceUrl: string, token: string, request: string, objects: SFObject[], apiKey: string,
+  badStatement: string, error: string, fallbackObject?: string
+): Promise<string> {
+  const { prompt } = await buildNlPrompt(instanceUrl, token, request, objects, fallbackObject)
+  const retry = prompt.replace(/Statement:$/, '') +
+    `\nA previous attempt was:\n${badStatement}\nSalesforce rejected it with this error:\n${error.slice(0, 500)}\nWrite a corrected statement that follows the SOQL rules above.\nStatement:`
+  return repairSoql(cleanStatement(await askAI(retry, apiKey)))
 }

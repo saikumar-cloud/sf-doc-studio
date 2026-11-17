@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   parseStatement, runQuery, queryMore, getOrgInfo, previewDml, executeDml, flattenRecord, toCsv,
-  SessionExpiredError, MAX_DML_RECORDS, type OrgInfo, type DmlPreview, type DmlResult, type QueryPage, type Statement,
+  SessionExpiredError, MAX_DML_RECORDS, SF_ID, type OrgInfo, type DmlPreview, type DmlResult, type QueryPage, type Statement,
 } from '../services/salesforce/data'
-import { naturalLanguageToStatement } from '../services/salesforce/nl'
+import { naturalLanguageToStatement, fixStatement } from '../services/salesforce/nl'
 import { aiErrorText } from '../services/ai'
 import type { SFObject } from '../services/salesforce/metadata'
 import AIText from './AIText'
@@ -66,7 +66,7 @@ function Table({ columns, rows, instanceUrl }: { columns: string[], rows: Record
               {columns.map(c => {
                 const v = r[c]
                 const text = v === null || v === undefined ? '' : String(v)
-                const isId = c === 'Id' && /^[a-zA-Z0-9]{15,18}$/.test(text)
+                const isId = (c === 'Id' || /Id$/.test(c)) && SF_ID.test(text)
                 return (
                   <td key={c} title={text} style={{ padding: '5px 8px', borderBottom: '1px solid #21262d', color: '#e6edf3', maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {isId
@@ -122,13 +122,30 @@ export default function QueryEditor({ instanceUrl, accessToken, apiKey, objects,
     setGenerating(true); setNlNote(''); reset()
     try {
       const fromEditor = /\bFROM\s+(\w+)/i.exec(statement)?.[1] || /\bINTO\s+(\w+)/i.exec(statement)?.[1]
-      const s = await naturalLanguageToStatement(instanceUrl, accessToken, request, objects, apiKey, fromEditor || contextObject)
+      const ctx = fromEditor || contextObject
+      let s = await naturalLanguageToStatement(instanceUrl, accessToken, request, objects, apiKey, ctx)
       setStatement(s)
+      let err = await runText(s)
+      let corrected = false
+      if (err && err !== 'TOKEN_EXPIRED') {
+        // One automatic retry: show the AI what Salesforce rejected.
+        try {
+          const fixed = await fixStatement(instanceUrl, accessToken, request, objects, apiKey, s, err, ctx)
+          if (fixed && fixed !== s) {
+            s = fixed; corrected = true
+            setStatement(s); reset()
+            err = await runText(s)
+          }
+        } catch { /* keep the first error */ }
+      }
       const kind = s.trim().split(/\s+/)[0].toUpperCase()
-      setNlNote(kind === 'SELECT'
-        ? 'Done. The query is below; you can edit it and click Run again.'
-        : 'This is a data change, so nothing has changed yet. Check the preview below, then confirm.')
-      await runText(s)
+      if (err) {
+        setNlNote("Error: the AI's query didn't work. Edit it below and click Run, or reword your question." + (apiKey ? '' : ' Tip: the free on-device AI is small; adding an Anthropic key in Settings gives much better queries.'))
+      } else {
+        setNlNote((corrected ? 'The first try had an error, so it was corrected automatically. ' : '') + (kind === 'SELECT'
+          ? 'Done. The query is below; you can edit it and click Run again.'
+          : 'This is a data change, so nothing has changed yet. Check the preview below, then confirm.'))
+      }
     } catch (e) {
       if (e instanceof SessionExpiredError) onExpired()
       else setNlNote(aiErrorText(e))
@@ -136,16 +153,18 @@ export default function QueryEditor({ instanceUrl, accessToken, apiKey, objects,
     setGenerating(false)
   }
 
-  const runText = async (text: string) => {
+  // Returns the error message, or null when it worked.
+  const runText = async (text: string): Promise<string | null> => {
     let st
-    try { st = parseStatement(text) } catch (e) { setError((e as Error).message); return }
-    await runStatement(st)
+    try { st = parseStatement(text) } catch (e) { setError((e as Error).message); return (e as Error).message }
+    return runStatement(st)
   }
 
   const run = async () => { reset(); setNlNote(''); await runText(statement) }
 
-  const runStatement = async (st: Statement) => {
+  const runStatement = async (st: Statement): Promise<string | null> => {
     setRunning(true)
+    let err: string | null = null
     try {
       if (st.kind === 'select') {
         const p = await runQuery(instanceUrl, accessToken, st.soql)
@@ -153,8 +172,9 @@ export default function QueryEditor({ instanceUrl, accessToken, apiKey, objects,
       } else {
         setPreview(await previewDml(instanceUrl, accessToken, st))
       }
-    } catch (e) { fail(e) }
+    } catch (e) { fail(e); err = (e as Error).message }
     setRunning(false)
+    return err
   }
 
   const loadMore = async () => {
@@ -241,8 +261,8 @@ export default function QueryEditor({ instanceUrl, accessToken, apiKey, objects,
             {generating ? '✨ Working on it...' : '✨ Ask'}
           </button>
           {nlNote && (
-            <div style={{ marginTop: '8px', fontSize: '11px', color: nlNote.startsWith('Done') ? '#3fb950' : nlNote.startsWith('This is a data change') ? '#e3b341' : '#e6edf3' }}>
-              {nlNote.startsWith('Done') || nlNote.startsWith('This is a data change') ? nlNote : <AIText text={nlNote} purpose="query" />}
+            <div style={{ marginTop: '8px', fontSize: '11px', color: nlNote.startsWith('Error:') ? '#e3b341' : /^(Done|The first try)/.test(nlNote) ? '#3fb950' : nlNote.startsWith('This is a data change') ? '#e3b341' : '#e6edf3' }}>
+              {/^(Done|The first try|This is a data change|Error:)/.test(nlNote) ? nlNote.replace(/^Error: /, '') : <AIText text={nlNote} purpose="query" />}
             </div>
           )}
           <div style={{ fontSize: '10px', color: '#484f58', marginTop: '6px' }}>Questions run straight away. Data changes always stop at a preview for you to confirm. Only your request and field names go to the AI, never record data.</div>
@@ -284,7 +304,7 @@ export default function QueryEditor({ instanceUrl, accessToken, apiKey, objects,
 
         </>}
 
-        {error && <div style={{ ...box, borderColor: '#cf222e66', color: '#ff7b72', fontSize: '12px', wordBreak: 'break-word' }}>⚠️ {error}</div>}
+        {error && <div style={{ ...box, borderColor: '#cf222e66', color: '#ff7b72', fontSize: '11px', wordBreak: 'break-word', whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, Menlo, monospace' }}>⚠️ {error.trim()}</div>}
 
         {/* Query results */}
         {page && (
@@ -347,6 +367,18 @@ export default function QueryEditor({ instanceUrl, accessToken, apiKey, objects,
             <div style={{ fontSize: '13px', fontWeight: 700, color: result.failed ? '#e3b341' : '#3fb950' }}>
               {result.failed ? '⚠️' : '✅'} {result.succeeded} succeeded{result.created && result.created !== result.succeeded ? ` (${result.created} created)` : ''}, {result.failed} failed
             </div>
+            {result.records.length > 0 && (
+              <div style={{ marginTop: '8px' }}>
+                <div style={{ fontSize: '11px', color: '#8b949e', marginBottom: '4px' }}>{result.records.some(r => r.created) ? 'Records (click to open):' : 'Updated records (click to open):'}</div>
+                {result.records.slice(0, 50).map(r => (
+                  <div key={r.row + r.id} style={{ fontSize: '11px', display: 'flex', gap: '6px', marginTop: '2px' }}>
+                    {r.row !== r.id && <span style={{ color: '#8b949e' }}>{r.row}{r.created ? ' (created)' : ''}:</span>}
+                    <a href="#" onClick={e => { e.preventDefault(); chrome.tabs.create({ url: `${instanceUrl}/${r.id}` }) }} style={{ color: '#58a6ff', fontFamily: 'ui-monospace, Menlo, monospace' }}>{r.id}</a>
+                  </div>
+                ))}
+                {result.records.length > 50 && <div style={{ fontSize: '11px', color: '#8b949e', marginTop: '2px' }}>…and {result.records.length - 50} more. Run a query to see them all.</div>}
+              </div>
+            )}
             {result.errors.slice(0, 50).map((er, i) => (
               <div key={i} style={{ fontSize: '11px', color: '#ff7b72', marginTop: '4px', wordBreak: 'break-word' }}>{er.row}: {er.message}</div>
             ))}

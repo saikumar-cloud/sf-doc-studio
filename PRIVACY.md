@@ -1,6 +1,6 @@
 # Privacy Policy - SF Doc Studio
 
-Last updated: November 17, 2026 (version 1.2.0)
+Last updated: November 17, 2026 (version 1.3.0)
 
 SF Doc Studio is a Chrome extension that documents and analyzes the configuration (metadata) of a Salesforce org you connect it to. This policy explains what the extension handles and where it goes.
 

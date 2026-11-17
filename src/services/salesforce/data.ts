@@ -180,11 +180,36 @@ export interface FieldInfo {
   picklistValues?: { value: string, active: boolean }[],
   updateable?: boolean, createable?: boolean, nillable?: boolean, defaultedOnCreate?: boolean,
   externalId?: boolean, idLookup?: boolean, calculated?: boolean,
+  referenceTo?: string[], relationshipName?: string | null,
+}
+
+export interface ChildRelationship { childSObject: string, field: string, relationshipName: string | null }
+
+export async function describeFull(instanceUrl: string, token: string, object: string): Promise<{ fields: FieldInfo[], childRelationships: ChildRelationship[] }> {
+  const d = await sf(instanceUrl, token, `/sobjects/${encodeURIComponent(object)}/describe/`)
+  return { fields: d.fields || [], childRelationships: d.childRelationships || [] }
 }
 
 export async function describeObject(instanceUrl: string, token: string, object: string): Promise<FieldInfo[]> {
-  const d = await sf(instanceUrl, token, `/sobjects/${encodeURIComponent(object)}/describe/`)
-  return d.fields || []
+  return (await describeFull(instanceUrl, token, object)).fields
+}
+
+export const SF_ID = /^[a-zA-Z0-9]{15}([a-zA-Z0-9]{3})?$/
+
+// Common mistakes AI models make in SOQL, fixed before the query is sent.
+export function repairSoql(text: string): string {
+  let s = text
+  // Field CONTAINS 'x'  ->  Field LIKE '%x%'
+  s = s.replace(/([\w.]+)\s+(NOT\s+)?CONTAINS\s+'((?:[^'\\]|\\.)*)'/gi, (_, f, not, v) => not ? `(NOT ${f} LIKE '%${v.replace(/^%|%$/g, '')}%')` : `${f} LIKE '%${v.replace(/^%|%$/g, '')}%'`)
+  // ILIKE (Postgres) -> LIKE
+  s = s.replace(/\bILIKE\b/gi, 'LIKE')
+  // "double quoted" values -> 'single quoted'
+  s = s.replace(/(=|!=|<>|LIKE|IN\s*\(|,)\s*"([^"']*)"/gi, (_, op, v) => `${op} '${v}'`)
+  // <> -> !=
+  s = s.replace(/<>/g, '!=')
+  // SELECT * is not allowed in SOQL
+  s = s.replace(/^SELECT\s+\*\s+FROM/i, 'SELECT FIELDS(STANDARD) FROM')
+  return s
 }
 
 // Turns nested query results (Account.Owner.Name, child subqueries) into flat rows.
@@ -263,7 +288,7 @@ export async function previewDml(instanceUrl: string, token: string, st: Stateme
   return { statement: st, count: records.length, overLimit, columns, rows, targetIds: records.map(r => r.Id) }
 }
 
-export interface DmlResult { succeeded: number, failed: number, created: number, errors: { row: string, message: string }[] }
+export interface DmlResult { succeeded: number, failed: number, created: number, errors: { row: string, message: string }[], records: { row: string, id: string, created?: boolean }[] }
 
 function chunk<T>(arr: T[]): T[][] {
   const out: T[][] = []
@@ -273,12 +298,17 @@ function chunk<T>(arr: T[]): T[][] {
 
 export async function executeDml(instanceUrl: string, token: string, p: DmlPreview, onProgress?: (done: number) => void): Promise<DmlResult> {
   const st = p.statement
-  const res: DmlResult = { succeeded: 0, failed: 0, created: 0, errors: [] }
+  const res: DmlResult = { succeeded: 0, failed: 0, created: 0, errors: [], records: [] }
   if (p.overLimit) throw new Error(`More than ${MAX_DML_RECORDS} records. Narrow the WHERE clause or add a LIMIT.`)
   let done = 0
   const collect = (results: any[], labels: string[]) => {
     results.forEach((r, i) => {
-      if (r.success) { res.succeeded++; if (r.created) res.created++ }
+      if (r.success) {
+        res.succeeded++
+        if (r.created) res.created++
+        const id = r.id || (SF_ID.test(labels[i]) ? labels[i] : '')
+        if (id && st.kind !== 'delete') res.records.push({ row: labels[i], id, created: st.kind === 'insert' || !!r.created })
+      }
       else { res.failed++; res.errors.push({ row: labels[i], message: (r.errors || []).map((e: any) => e.message).join('; ') || 'Failed' }) }
     })
     done += results.length
