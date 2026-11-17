@@ -60,9 +60,9 @@ export function parseValue(raw: string): Value {
   if (!v) throw new Error('A value is empty.')
   const q = v[0]
   if ((q === "'" || q === '"') && v.endsWith(q) && v.length >= 2) {
-    let body = v.slice(1, -1).replace(/\\(.)/g, (_, ch) => (ch === 'n' ? '\n' : ch === q ? '\u0001' : ch))
+    let body = v.slice(1, -1).replace(/\\(.)/g, (_, ch) => (ch === 'n' ? '\n' : ch === q ? '\uE000' : ch))
     if (q === "'") body = body.replace(/''/g, "'")
-    return body.replace(/\u0001/g, q)
+    return body.replace(/\uE000/g, q)
   }
   if (/^null$/i.test(v)) return null
   if (/^true$/i.test(v)) return true
@@ -175,7 +175,12 @@ export async function getOrgInfo(instanceUrl: string, token: string): Promise<Or
   return { name: o.Name || '', type, isSandbox, isProduction: !isSandbox && type !== 'Developer Edition' }
 }
 
-export interface FieldInfo { name: string, label: string, type: string, picklistValues?: { value: string, active: boolean }[], updateable?: boolean, createable?: boolean }
+export interface FieldInfo {
+  name: string, label: string, type: string,
+  picklistValues?: { value: string, active: boolean }[],
+  updateable?: boolean, createable?: boolean, nillable?: boolean, defaultedOnCreate?: boolean,
+  externalId?: boolean, idLookup?: boolean, calculated?: boolean,
+}
 
 export async function describeObject(instanceUrl: string, token: string, object: string): Promise<FieldInfo[]> {
   const d = await sf(instanceUrl, token, `/sobjects/${encodeURIComponent(object)}/describe/`)
@@ -306,4 +311,55 @@ export async function executeDml(instanceUrl: string, token: string, p: DmlPrevi
     if (st.kind === 'insert') res.created = res.succeeded
   }
   return res
+}
+
+// ---------- Helpers for the Insert / Update / Delete / Upsert forms ----------
+
+// Parses CSV text (header row first). Handles quoted values, commas and line breaks inside quotes.
+export function parseCsv(text: string): { header: string[], rows: string[][] } {
+  const rows: string[][] = []
+  let row: string[] = [], cell = '', quoted = false
+  const src = text.replace(/\r\n?/g, '\n')
+  for (let i = 0; i < src.length; i++) {
+    const c = src[i]
+    if (quoted) {
+      if (c === '"' && src[i + 1] === '"') { cell += '"'; i++ }
+      else if (c === '"') quoted = false
+      else cell += c
+    } else if (c === '"' && cell === '') quoted = true
+    else if (c === ',' || c === '\t') { row.push(cell); cell = '' }
+    else if (c === '\n') { row.push(cell); rows.push(row); row = []; cell = '' }
+    else cell += c
+  }
+  if (cell !== '' || row.length) { row.push(cell); rows.push(row) }
+  const clean = rows.filter(r => r.some(v => v.trim() !== ''))
+  if (!clean.length) throw new Error('Paste CSV with a header row of field API names, for example: FirstName,LastName')
+  return { header: clean[0].map(h => h.trim()), rows: clean.slice(1) }
+}
+
+// Converts form or CSV text into the right type for the field.
+export function coerce(raw: string, field?: FieldInfo): Value {
+  const v = raw.trim()
+  if (v === '') return null
+  const t = field?.type
+  if (t === 'boolean') {
+    if (/^(true|yes|1)$/i.test(v)) return true
+    if (/^(false|no|0)$/i.test(v)) return false
+    throw new Error(`${field!.name} needs true or false, not "${v}".`)
+  }
+  if (t === 'int' || t === 'double' || t === 'currency' || t === 'percent') {
+    const n = Number(v.replace(/,/g, ''))
+    if (Number.isNaN(n)) throw new Error(`${field!.name} needs a number, not "${v}".`)
+    return n
+  }
+  return v
+}
+
+export function idsToWhere(text: string): string {
+  const ids = text.split(/[\s,;]+/).map(x => x.trim()).filter(Boolean)
+  if (!ids.length) throw new Error('Paste at least one record Id.')
+  const bad = ids.find(id => !/^[a-zA-Z0-9]{15}([a-zA-Z0-9]{3})?$/.test(id))
+  if (bad) throw new Error(`"${bad}" is not a Salesforce record Id.`)
+  if (ids.length > MAX_DML_RECORDS) throw new Error(`Up to ${MAX_DML_RECORDS} Ids at a time.`)
+  return `Id IN (${ids.map(id => `'${id}'`).join(', ')})`
 }

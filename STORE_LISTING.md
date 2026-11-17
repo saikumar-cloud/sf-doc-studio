@@ -27,8 +27,8 @@ WHAT IT DOES
 • Export: generate a printable documentation report for an object (save as PDF)
 • OmniStudio: list and explain OmniScripts, DataRaptors, Integration Procedures, and FlexCards
 • Query Editor: run SOQL, see results in a table, export to CSV
-• Plain-English queries: type "show open cases older than a year" and AI drafts the query for you
-• Data changes: UPDATE, DELETE, INSERT and UPSERT with a preview of every affected record before anything changes, and an extra confirmation in production orgs
+• Plain-English queries: type "show open cases older than a year" and get the results straight away; the query is shown so you can reuse or edit it
+• Insert, Update, Delete and Upsert tabs: fill in a simple form or paste CSV, see a preview of every affected record, then confirm. Production orgs need an extra typed confirmation
 
 HOW IT WORKS
 1. Log in to Salesforce in Chrome as usual, then click the extension and press Connect. No extra sign-in, no connected app, no admin setup. Works with production orgs and sandboxes

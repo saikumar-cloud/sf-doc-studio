@@ -43,8 +43,6 @@ function App() {
   const [apiKey, setApiKey] = useState('')
   const [aiEngine, setAiEngine] = useState<string>('')
   const [aiSetupProgress, setAiSetupProgress] = useState<number | null>(null)
-  const [queryContext, setQueryContext] = useState<string | undefined>(undefined)
-  const [queryReturn, setQueryReturn] = useState<View>('objects')
   const [activeTab, setActiveTab] = useState<'overview'|'fields'|'save-sequence'>('overview')
   const [selectedComponent, setSelectedComponent] = useState<{name:string, type:string} | null>(null)
   const [saveSequence, setSaveSequence] = useState('')
@@ -583,14 +581,6 @@ Object stats:
                 </div>
               )}
 
-              <button onClick={() => { setQueryContext(selectedObject.name); setQueryReturn('object-doc'); setView('query') }} style={{
-                width: '100%', padding: '9px', borderRadius: '8px', background: '#161b22',
-                color: '#58a6ff', border: '1px solid #1f6feb55', cursor: 'pointer',
-                fontSize: '12px', fontWeight: '600', marginBottom: '12px'
-              }}>
-                🔎 Query {selectedObject.label} records
-              </button>
-
               {/* Automations */}
               {loadingObjSummary ? (
                 <div style={{ textAlign: 'center', padding: '20px', color: '#8b949e', fontSize: '12px' }}>🔍 Scanning automations...</div>
@@ -689,13 +679,11 @@ Object stats:
   if (view === 'query') {
     return (
       <QueryEditor
-        key={queryContext || 'all'}
         instanceUrl={instanceUrl}
         accessToken={accessToken}
         apiKey={apiKey}
         objects={objects}
-        contextObject={queryContext}
-        onBack={() => setView(queryReturn)}
+        onBack={() => setView('objects')}
         onExpired={handleTokenExpired}
       />
     )
@@ -903,9 +891,21 @@ Object stats:
           <div style={{ fontSize: '13px', fontWeight: '700' }}>SF Doc Studio</div>
           <div style={{ fontSize: '11px', color: '#00c851' }}>● Connected</div>
         </div>
-        <button onClick={() => { setQueryContext(undefined); setQueryReturn('objects'); setView('query') }} style={{ background: 'none', border: '1px solid #30363d', borderRadius: '4px', color: '#8b949e', cursor: 'pointer', fontSize: '10px', padding: '3px 6px' }}>Query</button>
         <button onClick={() => { setView('omni'); setLoadingOmni(true); fetchOmniStudioComponents(instanceUrl, accessToken).then(setOmniComponents).catch(console.error).finally(() => setLoadingOmni(false)) }} style={{ background: 'none', border: '1px solid #30363d', borderRadius: '4px', color: '#8b949e', cursor: 'pointer', fontSize: '10px', padding: '3px 6px' }}>OmniStudio</button>
         <button onClick={() => setView('settings')} style={{ background: 'none', border: 'none', color: '#8b949e', cursor: 'pointer', fontSize: '18px', padding: '0' }}>⚙️</button>
+      </div>
+      <div style={{ padding: '10px 16px 0' }}>
+        <button onClick={() => setView('query')} style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: '10px', cursor: 'pointer',
+          border: '1px solid #1f6feb66', background: 'linear-gradient(135deg, #0d2a4a, #161b22)', color: '#fff', textAlign: 'left',
+        }}>
+          <span style={{ fontSize: '20px' }}>🔎</span>
+          <span style={{ flex: 1 }}>
+            <span style={{ display: 'block', fontSize: '13px', fontWeight: 700 }}>Query Editor</span>
+            <span style={{ display: 'block', fontSize: '11px', color: '#8b949e' }}>Ask in plain English · SOQL · Insert, Update, Delete, Upsert</span>
+          </span>
+          <span style={{ color: '#58a6ff', fontSize: '16px' }}>›</span>
+        </button>
       </div>
       <div style={{ padding: '10px 16px', borderBottom: '1px solid #21262d' }}>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search objects..."

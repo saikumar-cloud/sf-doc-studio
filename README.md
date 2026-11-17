@@ -9,8 +9,8 @@ AI-powered Salesforce documentation and impact analyzer Chrome extension.
 - Impact analyzer with risk scoring
 - Export to PDF
 - Query Editor: SOQL with results table and CSV export
-- Plain-English queries drafted by AI
-- UPDATE, DELETE, INSERT, UPSERT with preview and confirmation (extra confirmation in production)
+- Plain-English questions that run straight away
+- Insert, Update, Delete and Upsert tabs (forms or CSV) with preview and confirmation, plus an extra confirmation in production
 - OmniStudio support
 - No sign-in setup: uses the Salesforce login already open in your browser (production and sandbox)
 

@@ -1,6 +1,6 @@
 # Privacy Policy - SF Doc Studio
 
-Last updated: November 17, 2026 (version 1.1.0)
+Last updated: November 17, 2026 (version 1.2.0)
 
 SF Doc Studio is a Chrome extension that documents and analyzes the configuration (metadata) of a Salesforce org you connect it to. This policy explains what the extension handles and where it goes.
 
@@ -26,6 +26,7 @@ The documentation and impact features read metadata (how your org is configured)
 **Query Editor (only when you use it):**
 - Runs the SOQL queries you write or approve, and shows the matching records (for example accounts or contacts) in the panel. Results stay on your computer; a CSV export is saved only to your own device.
 - Runs data changes (UPDATE, DELETE, INSERT, UPSERT) against your org only after you preview the affected records and confirm. In production orgs you must also type the number of records.
+- Insert, Update, Delete and Upsert forms: the values and CSV you enter are sent only to your own Salesforce org, after you preview and confirm.
 - Reads the org name and type, to warn you when you are working in production.
 
 ## Plain-English queries

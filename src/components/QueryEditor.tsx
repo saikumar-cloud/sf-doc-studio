@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   parseStatement, runQuery, queryMore, getOrgInfo, previewDml, executeDml, flattenRecord, toCsv,
-  SessionExpiredError, MAX_DML_RECORDS, type OrgInfo, type DmlPreview, type DmlResult, type QueryPage,
+  SessionExpiredError, MAX_DML_RECORDS, type OrgInfo, type DmlPreview, type DmlResult, type QueryPage, type Statement,
 } from '../services/salesforce/data'
 import { naturalLanguageToStatement } from '../services/salesforce/nl'
 import { aiErrorText } from '../services/ai'
 import type { SFObject } from '../services/salesforce/metadata'
 import AIText from './AIText'
+import DataForms, { type DataTab } from './DataForms'
 
 interface Props {
   instanceUrl: string
@@ -17,6 +18,14 @@ interface Props {
   onBack: () => void
   onExpired: () => void
 }
+
+const TABS: { key: 'query' | DataTab, label: string }[] = [
+  { key: 'query', label: '🔎 Query' },
+  { key: 'insert', label: '➕ Insert' },
+  { key: 'update', label: '✏️ Update' },
+  { key: 'delete', label: '🗑 Delete' },
+  { key: 'upsert', label: '🔁 Upsert' },
+]
 
 const EXAMPLES = [
   'SELECT Id, Name, Industry FROM Account ORDER BY CreatedDate DESC LIMIT 20',
@@ -76,6 +85,7 @@ function Table({ columns, rows, instanceUrl }: { columns: string[], rows: Record
 
 export default function QueryEditor({ instanceUrl, accessToken, apiKey, objects, contextObject, onBack, onExpired }: Props) {
   const [org, setOrg] = useState<OrgInfo | null>(null)
+  const [tab, setTab] = useState<'query' | DataTab>('query')
   const [request, setRequest] = useState('')
   const [generating, setGenerating] = useState(false)
   const [nlNote, setNlNote] = useState('')
@@ -98,6 +108,8 @@ export default function QueryEditor({ instanceUrl, accessToken, apiKey, objects,
 
   const columns = useMemo(() => columnsOf(rows), [rows])
 
+  const switchTab = (t: 'query' | DataTab) => { setTab(t); reset() }
+
   const fail = (e: unknown) => {
     if (e instanceof SessionExpiredError) { onExpired(); return }
     setError((e as Error).message)
@@ -112,7 +124,11 @@ export default function QueryEditor({ instanceUrl, accessToken, apiKey, objects,
       const fromEditor = /\bFROM\s+(\w+)/i.exec(statement)?.[1] || /\bINTO\s+(\w+)/i.exec(statement)?.[1]
       const s = await naturalLanguageToStatement(instanceUrl, accessToken, request, objects, apiKey, fromEditor || contextObject)
       setStatement(s)
-      setNlNote('Draft ready. Check it, then click Run. Nothing has been run yet.')
+      const kind = s.trim().split(/\s+/)[0].toUpperCase()
+      setNlNote(kind === 'SELECT'
+        ? 'Done. The query is below; you can edit it and click Run again.'
+        : 'This is a data change, so nothing has changed yet. Check the preview below, then confirm.')
+      await runText(s)
     } catch (e) {
       if (e instanceof SessionExpiredError) onExpired()
       else setNlNote(aiErrorText(e))
@@ -120,10 +136,15 @@ export default function QueryEditor({ instanceUrl, accessToken, apiKey, objects,
     setGenerating(false)
   }
 
-  const run = async () => {
-    reset()
+  const runText = async (text: string) => {
     let st
-    try { st = parseStatement(statement) } catch (e) { setError((e as Error).message); return }
+    try { st = parseStatement(text) } catch (e) { setError((e as Error).message); return }
+    await runStatement(st)
+  }
+
+  const run = async () => { reset(); setNlNote(''); await runText(statement) }
+
+  const runStatement = async (st: Statement) => {
     setRunning(true)
     try {
       if (st.kind === 'select') {
@@ -180,7 +201,31 @@ export default function QueryEditor({ instanceUrl, accessToken, apiKey, objects,
         </div>
       </div>
 
+      <div style={{ display: 'flex', borderBottom: '1px solid #21262d', background: '#0d1117' }}>
+        {TABS.map(t => (
+          <button key={t.key} onClick={() => switchTab(t.key)} style={{
+            flex: 1, padding: '9px 2px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 600,
+            borderBottom: tab === t.key ? '2px solid #00a1e0' : '2px solid transparent', color: tab === t.key ? '#00a1e0' : '#8b949e',
+          }}>{t.label}</button>
+        ))}
+      </div>
+
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
+        {tab !== 'query' && (
+          <DataForms
+            key={tab}
+            tab={tab}
+            instanceUrl={instanceUrl}
+            accessToken={accessToken}
+            objects={objects}
+            busy={running}
+            onPreview={st => { reset(); runStatement(st) }}
+            onReset={reset}
+            onExpired={onExpired}
+          />
+        )}
+
+        {tab === 'query' && <>
         {/* Plain English */}
         <div style={box}>
           <div style={{ fontSize: '11px', fontWeight: 700, color: '#8b949e', marginBottom: '6px' }}>✨ ASK IN PLAIN ENGLISH</div>
@@ -188,24 +233,24 @@ export default function QueryEditor({ instanceUrl, accessToken, apiKey, objects,
             value={request}
             onChange={e => setRequest(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) generate() }}
-            placeholder={'e.g. show accounts in technology created this year\nor: set priority to High for new cases older than a week'}
+            placeholder={'e.g. show accounts in technology created this year\nhow many open cases do we have by priority?'}
             rows={2}
             style={{ width: '100%', boxSizing: 'border-box', background: '#0d1117', border: '1px solid #30363d', borderRadius: '6px', color: '#fff', fontSize: '12px', padding: '8px', resize: 'vertical', outline: 'none', fontFamily: 'inherit' }}
           />
           <button onClick={generate} disabled={generating || !request.trim()} style={{ ...btn('linear-gradient(135deg, #6e40c9, #1f6feb)', generating || !request.trim()), width: '100%', marginTop: '6px' }}>
-            {generating ? '✨ Writing the statement...' : '✨ Write statement'}
+            {generating ? '✨ Working on it...' : '✨ Ask'}
           </button>
           {nlNote && (
-            <div style={{ marginTop: '8px', fontSize: '11px', color: nlNote.startsWith('Draft') ? '#3fb950' : '#e6edf3' }}>
-              {nlNote.startsWith('Draft') ? nlNote : <AIText text={nlNote} purpose="query" />}
+            <div style={{ marginTop: '8px', fontSize: '11px', color: nlNote.startsWith('Done') ? '#3fb950' : nlNote.startsWith('This is a data change') ? '#e3b341' : '#e6edf3' }}>
+              {nlNote.startsWith('Done') || nlNote.startsWith('This is a data change') ? nlNote : <AIText text={nlNote} purpose="query" />}
             </div>
           )}
-          <div style={{ fontSize: '10px', color: '#484f58', marginTop: '6px' }}>Only your request and field names are given to the AI, never record data. Drafts never run on their own.</div>
+          <div style={{ fontSize: '10px', color: '#484f58', marginTop: '6px' }}>Questions run straight away. Data changes always stop at a preview for you to confirm. Only your request and field names go to the AI, never record data.</div>
         </div>
 
         {/* Editor */}
         <div style={box}>
-          <div style={{ fontSize: '11px', fontWeight: 700, color: '#8b949e', marginBottom: '6px' }}>SOQL OR DATA CHANGE</div>
+          <div style={{ fontSize: '11px', fontWeight: 700, color: '#8b949e', marginBottom: '6px' }}>SOQL (WRITE YOUR OWN OR EDIT THE ONE ABOVE)</div>
           <textarea
             value={statement}
             onChange={e => setStatement(e.target.value)}
@@ -236,6 +281,8 @@ export default function QueryEditor({ instanceUrl, accessToken, apiKey, objects,
             </div>
           </details>
         </div>
+
+        </>}
 
         {error && <div style={{ ...box, borderColor: '#cf222e66', color: '#ff7b72', fontSize: '12px', wordBreak: 'break-word' }}>⚠️ {error}</div>}
 
