@@ -9,8 +9,11 @@ import {
 } from './services/salesforce/metadata'
 import { generateHtmlReport } from './services/salesforce/reportGenerator'
 import { fetchOmniStudioComponents, explainOmniComponent } from './services/salesforce/metadata'
+import { aiErrorText, activeEngine, enableChromeAI, AIUnavailableError } from './services/ai'
+import AIText from './components/AIText'
+import QueryEditor from './components/QueryEditor'
 
-type View = 'objects' | 'object-doc' | 'fields' | 'impact' | 'settings' | 'omni'
+type View = 'objects' | 'object-doc' | 'fields' | 'impact' | 'settings' | 'omni' | 'query'
 
 function App() {
   const [connecting, setConnecting] = useState(false)
@@ -38,8 +41,8 @@ function App() {
   const [aiExplanation, setAiExplanation] = useState('')
   const [loadingAi, setLoadingAi] = useState(false)
   const [apiKey, setApiKey] = useState('')
-  const [showApiKey, setShowApiKey] = useState(false)
-  const [pendingComponent, setPendingComponent] = useState<{name:string, type:string} | null>(null)
+  const [aiEngine, setAiEngine] = useState<string>('')
+  const [aiSetupProgress, setAiSetupProgress] = useState<number | null>(null)
   const [activeTab, setActiveTab] = useState<'overview'|'fields'|'save-sequence'>('overview')
   const [selectedComponent, setSelectedComponent] = useState<{name:string, type:string} | null>(null)
   const [saveSequence, setSaveSequence] = useState('')
@@ -78,6 +81,11 @@ function App() {
       }
     })
   }, [])
+
+  // Which AI engine will answer explanations (shown in Settings).
+  useEffect(() => {
+    activeEngine(apiKey).then(setAiEngine).catch(() => setAiEngine('unavailable'))
+  }, [apiKey, view])
 
   const handleTokenExpired = () => {
     setAccessToken('')
@@ -165,7 +173,6 @@ function App() {
   }
 
   const handleComponentClick = async (name: string, type: string) => {
-    if (!apiKey) { setPendingComponent({name, type}); setShowApiKey(true); return }
     setSelectedComponent({ name, type })
     setComponentExplanation('')
     setLoadingComponent(true)
@@ -196,20 +203,25 @@ function App() {
         setComponentExplanation(explanation)
       }
     } catch (e) {
-      setComponentExplanation('Failed: ' + (e as Error).message)
+      setComponentExplanation(aiErrorText(e))
     }
     setLoadingComponent(false)
   }
 
   const handleExport = async () => {
     if (!objSummary || !fields.length) { alert("Please wait for object data to load first"); return }
-    if (!apiKey) { setShowApiKey(true); return }
     setExportingPdf(true)
     try {
       const flowNames = (objSummary?.flows || []).slice(0,5).map((f:any) => f.name).join(", ") || "None"
       const classNames = (objSummary?.apexClasses || []).slice(0,5).map((f:any) => f.name).join(", ") || "None"
       const prompt = ["Write documentation for", selectedObject!.label, "(" + selectedObject!.name + ").", "Stats:", fields.length, "fields,", (objSummary?.flows.length||0), "Flows (" + flowNames + "),", (objSummary?.apexClasses.length||0), "Apex Classes (" + classNames + "),", (objSummary?.apexTriggers.length||0), "Triggers,", (objSummary?.validationRules.length||0), "Validation Rules.", "Write: 1. Executive Summary (3-4 sentences for business) 2. Technical Overview 3. Key Business Rules 4. Integration Points 5. Developer Recommendations"].join(" ")
-      const aiSummary = await explainImpact("", "", "", null, apiKey, prompt)
+      let aiSummary = ''
+      try {
+        aiSummary = await explainImpact("", "", "", null, apiKey, prompt)
+      } catch (e) {
+        // No AI available: export the report without the AI summary rather than failing.
+        if (!(e instanceof AIUnavailableError)) throw e
+      }
       const html = generateHtmlReport(selectedObject!, fields, objSummary!, aiSummary, instanceUrl)
       // Hand the report to the extension's own report page and open it in a new tab.
       await chrome.storage.local.set({ sfdsReport: html })
@@ -221,10 +233,8 @@ function App() {
   }
 
   const handleAiExplain = async (promptType?: string) => {
-    if (!apiKey) { setShowApiKey(true); return }
     setLoadingAi(true)
     setAiExplanation('')
-    chrome.storage.local.set({ anthropicKey: apiKey })
     try {
       let explanation = ''
       if (promptType === 'object' && selectedObject) {
@@ -243,7 +253,7 @@ Object stats:
       }
       setAiExplanation(explanation)
     } catch (e) {
-      setAiExplanation('Failed: ' + (e as Error).message)
+      setAiExplanation(aiErrorText(e))
     }
     setLoadingAi(false)
   }
@@ -361,7 +371,7 @@ Object stats:
           <div style={{ width: '100%', boxSizing: 'border-box', marginTop: '12px', padding: '10px 12px', background: '#cf222e22', border: '1px solid #cf222e44', borderRadius: '8px', fontSize: '11px', color: '#ff7b72', lineHeight: '1.5' }}>⚠️ {connectError}</div>
         )}
         <p style={{ fontSize: '10px', color: '#484f58', textAlign: 'center', margin: '16px 0 0 0', lineHeight: '1.5' }}>
-          Uses the Salesforce login already open in this browser. Read-only. Metadata you choose to analyze is sent to Anthropic using your own API key.{' '}
+          Uses the Salesforce login already open in this browser. Data changes only happen after you preview and confirm them. AI runs on your device by default.{' '}
           <a href="https://github.com/saikumar-cloud/sf-doc-studio/blob/main/PRIVACY.md" target="_blank" rel="noreferrer" style={{ color: '#8b949e' }}>Privacy policy</a>
         </p>
       </div>
@@ -416,26 +426,16 @@ Object stats:
           </div>
           {depSummary && !loadingDeps && (
             <div style={{ marginBottom: '10px' }}>
-              {!aiExplanation && !loadingAi && !showApiKey && (
+              {!aiExplanation && !loadingAi && (
                 <button onClick={() => handleAiExplain()} style={{ width: '100%', padding: '10px', borderRadius: '8px', background: 'linear-gradient(135deg, #6e40c9, #1f6feb)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>
                   ✨ Explain with AI
                 </button>
               )}
-              {showApiKey && !aiExplanation && (
-                <div style={{ background: '#161b22', borderRadius: '8px', padding: '12px', border: '1px solid #6e40c944' }}>
-                  <div style={{ fontSize: '11px', color: '#8b949e', marginBottom: '6px' }}>Enter your Anthropic API key</div>
-                  <input value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="sk-ant-..." type="password"
-                    style={{ width: '100%', padding: '7px 10px', background: '#0d1117', border: '1px solid #30363d', borderRadius: '6px', color: '#fff', fontSize: '12px', boxSizing: 'border-box', outline: 'none', marginBottom: '8px' }} />
-                  <button onClick={() => { chrome.storage.local.set({ anthropicKey: apiKey }); if (pendingComponent) { setShowApiKey(false); handleComponentClick(pendingComponent.name, pendingComponent.type); setPendingComponent(null) } else { handleAiExplain() } }} disabled={!apiKey} style={{ width: '100%', padding: '8px', borderRadius: '6px', background: apiKey ? 'linear-gradient(135deg, #6e40c9, #1f6feb)' : '#21262d', color: '#fff', border: 'none', cursor: apiKey ? 'pointer' : 'not-allowed', fontSize: '12px', fontWeight: '600' }}>
-                    ✨ Analyze
-                  </button>
-                </div>
-              )}
-              {loadingAi && <div style={{ padding: '12px', background: '#161b22', borderRadius: '8px', border: '1px solid #6e40c944', textAlign: 'center', fontSize: '12px', color: '#8b949e' }}>✨ Claude is analyzing...</div>}
+              {loadingAi && <div style={{ padding: '12px', background: '#161b22', borderRadius: '8px', border: '1px solid #6e40c944', textAlign: 'center', fontSize: '12px', color: '#8b949e' }}>✨ AI is analyzing...</div>}
               {aiExplanation && (
                 <div style={{ padding: '12px', background: '#161b22', borderRadius: '8px', border: '1px solid #6e40c944' }}>
                   <div style={{ fontSize: '11px', color: '#6e40c9', fontWeight: '700', marginBottom: '6px' }}>✨ AI ANALYSIS</div>
-                  <div style={{ fontSize: '12px', lineHeight: '1.6', color: '#e6edf3' }}>{aiExplanation}</div>
+                  <AIText text={aiExplanation} />
                 </div>
               )}
             </div>
@@ -450,8 +450,8 @@ Object stats:
           {depSummary && depSummary.total === 0 ? (
             <div style={{ textAlign: 'center', padding: '24px', background: '#161b22', borderRadius: '10px', border: '1px solid #238636' }}>
               <div style={{ fontSize: '28px', marginBottom: '8px' }}>✅</div>
-              <div style={{ fontSize: '14px', fontWeight: '600', color: '#238636' }}>No dependencies found</div>
-              <div style={{ fontSize: '12px', color: '#8b949e', marginTop: '4px' }}>Safe to modify or delete</div>
+              <div style={{ fontSize: '14px', fontWeight: '600', color: '#238636' }}>No tracked dependencies found</div>
+              <div style={{ fontSize: '11px', color: '#8b949e', marginTop: '6px', lineHeight: '1.5' }}>Salesforce's dependency data shows nothing referencing this field. It can't see dynamic Apex (field names in strings) or managed package code, so check those before deleting.</div>
             </div>
           ) : depSummary ? (
             <div>
@@ -494,13 +494,13 @@ Object stats:
           {loadingComponent ? (
             <div style={{ textAlign: 'center', padding: '40px' }}>
               <div style={{ fontSize: '24px', marginBottom: '12px' }}>✨</div>
-              <div style={{ fontSize: '13px', color: '#8b949e' }}>Claude is reading the code...</div>
+              <div style={{ fontSize: '13px', color: '#8b949e' }}>AI is reading the code...</div>
               <div style={{ fontSize: '11px', color: '#484f58', marginTop: '4px' }}>This may take 10-15 seconds</div>
             </div>
           ) : componentExplanation ? (
             <div style={{ padding: '12px', background: '#161b22', borderRadius: '8px', border: `1px solid ${typeColor}44` }}>
               <div style={{ fontSize: '11px', color: typeColor, fontWeight: '700', marginBottom: '8px' }}>✨ AI CODE ANALYSIS</div>
-              <div style={{ fontSize: '12px', lineHeight: '1.7', color: '#e6edf3', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{componentExplanation}</div>
+              <AIText text={componentExplanation} />
             </div>
           ) : (
             <div style={{ textAlign: 'center', padding: '40px', color: '#8b949e', fontSize: '12px' }}>
@@ -559,7 +559,7 @@ Object stats:
               </div>
 
               {/* AI Explain Object */}
-              {!aiExplanation && !loadingAi && !showApiKey && (
+              {!aiExplanation && !loadingAi && (
                 <button onClick={() => handleAiExplain('object')} style={{
                   width: '100%', padding: '10px', borderRadius: '8px',
                   background: 'linear-gradient(135deg, #6e40c9, #1f6feb)',
@@ -569,25 +569,15 @@ Object stats:
                   ✨ Explain this object with AI
                 </button>
               )}
-              {showApiKey && !aiExplanation && (
-                <div style={{ background: '#161b22', borderRadius: '8px', padding: '12px', border: '1px solid #6e40c944', marginBottom: '12px' }}>
-                  <div style={{ fontSize: '11px', color: '#8b949e', marginBottom: '6px' }}>Enter your Anthropic API key</div>
-                  <input value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="sk-ant-..." type="password"
-                    style={{ width: '100%', padding: '7px 10px', background: '#0d1117', border: '1px solid #30363d', borderRadius: '6px', color: '#fff', fontSize: '12px', boxSizing: 'border-box', outline: 'none', marginBottom: '8px' }} />
-                  <button onClick={() => { chrome.storage.local.set({ anthropicKey: apiKey }); if (pendingComponent) { setShowApiKey(false); handleComponentClick(pendingComponent.name, pendingComponent.type); setPendingComponent(null) } else { handleAiExplain('object') } }} disabled={!apiKey} style={{ width: '100%', padding: '8px', borderRadius: '6px', background: apiKey ? 'linear-gradient(135deg, #6e40c9, #1f6feb)' : '#21262d', color: '#fff', border: 'none', cursor: apiKey ? 'pointer' : 'not-allowed', fontSize: '12px', fontWeight: '600' }}>
-                    ✨ Analyze
-                  </button>
-                </div>
-              )}
               {loadingAi && (
                 <div style={{ padding: '12px', background: '#161b22', borderRadius: '8px', border: '1px solid #6e40c944', textAlign: 'center', fontSize: '12px', color: '#8b949e', marginBottom: '12px' }}>
-                  ✨ Claude is analyzing...
+                  ✨ AI is analyzing...
                 </div>
               )}
               {aiExplanation && (
                 <div style={{ padding: '12px', background: '#161b22', borderRadius: '8px', border: '1px solid #6e40c944', marginBottom: '12px' }}>
                   <div style={{ fontSize: '11px', color: '#6e40c9', fontWeight: '700', marginBottom: '6px' }}>✨ AI DOCUMENTATION</div>
-                  <div style={{ fontSize: '12px', lineHeight: '1.6', color: '#e6edf3', whiteSpace: 'pre-wrap' }}>{aiExplanation}</div>
+                  <AIText text={aiExplanation} />
                 </div>
               )}
 
@@ -617,14 +607,13 @@ Object stats:
             <div>
               {!saveSequence && !loadingSaveSequence && (
                 <button onClick={async () => {
-                  if (!apiKey) { setShowApiKey(true); return }
                   setLoadingSaveSequence(true)
                   try {
                     const data = await fetchSaveSequence(instanceUrl, accessToken, selectedObject!.name)
                     const explanation = await explainSaveSequence(selectedObject!.name, data, apiKey)
                     setSaveSequence(explanation)
                   } catch(e) {
-                    setSaveSequence('Failed: ' + (e as Error).message)
+                    setSaveSequence(aiErrorText(e))
                   }
                   setLoadingSaveSequence(false)
                 }} style={{
@@ -645,7 +634,7 @@ Object stats:
               {saveSequence && (
                 <div style={{ padding: '12px', background: '#161b22', borderRadius: '8px', border: '1px solid #e3b34144' }}>
                   <div style={{ fontSize: '11px', color: '#e3b341', fontWeight: '700', marginBottom: '8px' }}>⚡ SAVE SEQUENCE ANALYSIS</div>
-                  <div style={{ fontSize: '12px', lineHeight: '1.7', color: '#e6edf3', whiteSpace: 'pre-wrap' }}>{saveSequence}</div>
+                  <AIText text={saveSequence} />
                 </div>
               )}
             </div>
@@ -686,6 +675,20 @@ Object stats:
     )
   }
 
+  // Query Editor View
+  if (view === 'query') {
+    return (
+      <QueryEditor
+        instanceUrl={instanceUrl}
+        accessToken={accessToken}
+        apiKey={apiKey}
+        objects={objects}
+        onBack={() => setView('objects')}
+        onExpired={handleTokenExpired}
+      />
+    )
+  }
+
   // OmniStudio View
   if (view === 'omni') {
     const OmniSection = ({ title, icon, items, type, color }: { title: string, icon: string, items: any[], type: string, color: string }) => {
@@ -707,11 +710,10 @@ Object stats:
             <div style={{ background: '#0d1117', border: '1px solid ' + color + '22', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
               {items.map((item: any) => (
                 <div key={item.Id} onClick={() => {
-                  if (!apiKey) { setShowApiKey(true); return }
                   setSelectedOmni({ name: item.Name, type, data: item })
                   setOmniExplanation('')
                   explainOmniComponent(type, item.Name, item, apiKey)
-                    .then(setOmniExplanation).catch(console.error)
+                    .then(setOmniExplanation).catch(e => setOmniExplanation(aiErrorText(e)))
                 }} style={{ padding: '8px 12px', fontSize: '12px', color, borderBottom: '1px solid #21262d', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>{item.Name}</span>
                   <span style={{ fontSize: '10px', color: '#484f58' }}>✨ explain</span>
@@ -739,11 +741,11 @@ Object stats:
               <div style={{ fontSize: '13px', fontWeight: '700', marginBottom: '4px' }}>{selectedOmni.name}</div>
               <div style={{ fontSize: '11px', color: '#8b949e', marginBottom: '12px' }}>{selectedOmni.type}</div>
               {!omniExplanation ? (
-                <div style={{ textAlign: 'center', padding: '40px', color: '#8b949e', fontSize: '12px' }}>✨ Claude is analyzing...</div>
+                <div style={{ textAlign: 'center', padding: '40px', color: '#8b949e', fontSize: '12px' }}>✨ AI is analyzing...</div>
               ) : (
                 <div style={{ padding: '12px', background: '#161b22', borderRadius: '8px', border: '1px solid #6e40c944' }}>
                   <div style={{ fontSize: '11px', color: '#6e40c9', fontWeight: '700', marginBottom: '8px' }}>✨ AI ANALYSIS</div>
-                  <div style={{ fontSize: '12px', lineHeight: '1.7', color: '#e6edf3', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{omniExplanation}</div>
+                  <AIText text={omniExplanation} />
                 </div>
               )}
             </div>
@@ -773,10 +775,37 @@ Object stats:
         </div>
         <div style={{ flex: 1, padding: '16px', overflowY: 'auto' }}>
           
+          {/* AI engine */}
+          <div style={{ marginBottom: '24px', textAlign: 'left' }}>
+            <div style={{ fontSize: '12px', fontWeight: '700', color: '#8b949e', marginBottom: '8px' }}>AI EXPLANATIONS</div>
+            <div style={{ padding: '12px', background: '#161b22', borderRadius: '8px', border: '1px solid #21262d', fontSize: '12px', lineHeight: '1.5', color: '#e6edf3' }}>
+              {aiEngine === 'claude-key' && <>✅ Using <strong>Claude</strong> with your API key.</>}
+              {aiEngine === 'available' && <>✅ Using <strong>free on-device AI</strong> (Chrome's built-in Gemini Nano). Your code stays on this computer. Items too long for it get a free "Open in Claude" button.</>}
+              {(aiEngine === 'downloadable' || aiEngine === 'downloading') && (
+                <>
+                  <div style={{ marginBottom: '8px' }}>Free on-device AI is available for this computer and needs a one-time setup by Chrome.</div>
+                  <button
+                    disabled={aiSetupProgress !== null}
+                    onClick={async () => {
+                      setAiSetupProgress(0)
+                      const ok = await enableChromeAI(f => setAiSetupProgress(f))
+                      setAiSetupProgress(null)
+                      setAiEngine(ok ? 'available' : 'unavailable')
+                    }}
+                    style={{ width: '100%', padding: '9px', borderRadius: '6px', border: 'none', cursor: aiSetupProgress !== null ? 'default' : 'pointer', fontSize: '12px', fontWeight: 600, color: '#fff', background: aiSetupProgress !== null ? '#21262d' : 'linear-gradient(135deg, #238636, #1a7f37)' }}>
+                    {aiSetupProgress !== null ? `Setting up free AI... ${Math.round(aiSetupProgress * 100)}%` : '⬇️ Set up free on-device AI'}
+                  </button>
+                </>
+              )}
+              {aiEngine === 'unavailable' && <>Free on-device AI isn't available on this device. Explanations still work free: each one gives you a <strong>Copy prompt & open Claude</strong> button.</>}
+              {aiEngine === '' && <>Checking...</>}
+            </div>
+          </div>
+
           {/* API Key */}
           <div style={{ marginBottom: '24px' }}>
-            <div style={{ fontSize: '12px', fontWeight: '700', color: '#8b949e', marginBottom: '8px' }}>ANTHROPIC API KEY</div>
-            <div style={{ fontSize: '11px', color: '#484f58', marginBottom: '8px' }}>Required for AI explanations. Get yours at console.anthropic.com</div>
+            <div style={{ fontSize: '12px', fontWeight: '700', color: '#8b949e', marginBottom: '8px' }}>ANTHROPIC API KEY (OPTIONAL)</div>
+            <div style={{ fontSize: '11px', color: '#484f58', marginBottom: '8px' }}>Not needed: AI explanations are free without it. Add a key from console.anthropic.com only if you want answers from Claude shown here. Clear the box and save to remove it.</div>
             <input
               value={apiKey}
               onChange={e => setApiKey(e.target.value)}
@@ -864,6 +893,19 @@ Object stats:
         </div>
         <button onClick={() => { setView('omni'); setLoadingOmni(true); fetchOmniStudioComponents(instanceUrl, accessToken).then(setOmniComponents).catch(console.error).finally(() => setLoadingOmni(false)) }} style={{ background: 'none', border: '1px solid #30363d', borderRadius: '4px', color: '#8b949e', cursor: 'pointer', fontSize: '10px', padding: '3px 6px' }}>OmniStudio</button>
         <button onClick={() => setView('settings')} style={{ background: 'none', border: 'none', color: '#8b949e', cursor: 'pointer', fontSize: '18px', padding: '0' }}>⚙️</button>
+      </div>
+      <div style={{ padding: '10px 16px 0' }}>
+        <button onClick={() => setView('query')} style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: '10px', cursor: 'pointer',
+          border: '1px solid #1f6feb66', background: 'linear-gradient(135deg, #0d2a4a, #161b22)', color: '#fff', textAlign: 'left',
+        }}>
+          <span style={{ fontSize: '20px' }}>🔎</span>
+          <span style={{ flex: 1 }}>
+            <span style={{ display: 'block', fontSize: '13px', fontWeight: 700 }}>Query Editor</span>
+            <span style={{ display: 'block', fontSize: '11px', color: '#8b949e' }}>Ask in plain English · SOQL · Insert, Update, Delete, Upsert</span>
+          </span>
+          <span style={{ color: '#58a6ff', fontSize: '16px' }}>›</span>
+        </button>
       </div>
       <div style={{ padding: '10px 16px', borderBottom: '1px solid #21262d' }}>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search objects..."

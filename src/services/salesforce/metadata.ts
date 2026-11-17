@@ -1,3 +1,5 @@
+import { askAI } from '../ai'
+
 export interface SFObject {
   name: string
   label: string
@@ -368,16 +370,7 @@ Answer in this exact format. Be brief but specific. Reference actual names from 
 
 Be specific and technical. Reference actual method names and field names from the code.`
 
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(
-      { type: 'AI_EXPLAIN', prompt, apiKey },
-      (response) => {
-        if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return }
-        if (response?.error) { reject(new Error(response.error)); return }
-        resolve(response?.text || 'No response')
-      }
-    )
-  })
+  return askAI(prompt, apiKey)
 }
 
 export async function explainFlow(
@@ -438,16 +431,7 @@ Show ALL branches. Show path to END.
 
 **7. Dev Tips** - 3 bullet points max`
 
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(
-      { type: 'AI_EXPLAIN', prompt, apiKey },
-      (response) => {
-        if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return }
-        if (response?.error) { reject(new Error(response.error)); return }
-        resolve(response?.text || 'No response')
-      }
-    )
-  })
+  return askAI(prompt, apiKey)
 }
 
 
@@ -550,16 +534,7 @@ Please provide:
 
 Use plain English. Avoid Salesforce jargon where possible.`
 
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(
-      { type: 'AI_EXPLAIN', prompt, apiKey },
-      (response) => {
-        if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return }
-        if (response?.error) { reject(new Error(response.error)); return }
-        resolve(response?.text || 'No response')
-      }
-    )
-  })
+  return askAI(prompt, apiKey)
 }
 
 export async function explainSaveSequence(
@@ -609,16 +584,7 @@ Fill in the actual component names at each step.
 
 Be specific with actual component names.`
 
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(
-      { type: 'AI_EXPLAIN', prompt, apiKey },
-      (response) => {
-        if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return }
-        if (response?.error) { reject(new Error(response.error)); return }
-        resolve(response?.text || 'No response')
-      }
-    )
-  })
+  return askAI(prompt, apiKey)
 }
 
 
@@ -648,16 +614,7 @@ export async function explainOmniComponent(
 ): Promise<string> {
   const prompt = "You are a Salesforce OmniStudio expert. Analyze this " + componentType + " named " + componentName + ". Data: " + JSON.stringify(componentData).substring(0, 1000) + ". Write: **PURPOSE:** what it does. **TYPE:** subtype. **FUNCTIONALITY:** step by step. **DEPENDENCIES:** what it calls. **RISKS:** what breaks if modified. **DEV TIPS:** 3 tips."
 
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(
-      { type: 'AI_EXPLAIN', prompt, apiKey },
-      (response) => {
-        if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return }
-        if (response?.error) { reject(new Error(response.error)); return }
-        resolve(response?.text || 'No response')
-      }
-    )
-  })
+  return askAI(prompt, apiKey)
 }
 
 export async function explainImpact(
@@ -669,16 +626,7 @@ export async function explainImpact(
   customPrompt?: string
 ): Promise<string> {
   if (customPrompt) {
-    return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage(
-        { type: 'AI_EXPLAIN', prompt: customPrompt, apiKey },
-        (response) => {
-          if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return }
-          if (response?.error) { reject(new Error(response.error)); return }
-          resolve(response?.text || 'No response')
-        }
-      )
-    })
+    return askAI(customPrompt, apiKey)
   }
 
   const s = summary!
@@ -695,37 +643,9 @@ Dependencies found:
 - Reports: ${s.reports.length}
 - Total: ${s.total}
 
+Note: this list comes from Salesforce's dependency tracking, which does not include fields referenced by name in dynamic Apex (strings, sObject.get) or code inside managed packages. Mention this limit if the list is short or empty.
+
 Give a concise, practical risk assessment.`
 
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(
-      { type: 'AI_EXPLAIN', prompt, apiKey },
-      (response) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message)); return
-        }
-        if (response?.text) { resolve(response.text); return }
-        if (response?.error && !response?.resultKey) { reject(new Error(response.error)); return }
-        
-        // Poll storage for result
-        const key = response?.resultKey
-        if (!key) { reject(new Error('No result key')); return }
-        
-        let attempts = 0
-        const poll = setInterval(() => {
-          attempts++
-          chrome.storage.local.get(key, (result) => {
-            const data = result[key] as {done?: boolean, text?: string, error?: string} | undefined
-            if (data?.done) {
-              clearInterval(poll)
-              chrome.storage.local.remove(key)
-              if (data.error) reject(new Error(data.error))
-              else resolve(data.text || 'No response')
-            }
-            if (attempts > 30) { clearInterval(poll); reject(new Error('Timeout')) }
-          })
-        }, 500)
-      }
-    )
-  })
+  return askAI(prompt, apiKey)
 }
