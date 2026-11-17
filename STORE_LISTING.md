@@ -7,7 +7,7 @@ Copy-paste text for each field in the Chrome Web Store Developer Dashboard.
 **Name:** SF Doc Studio
 
 **Summary (132 characters max):**
-AI-powered impact analyzer and documentation tool for Salesforce orgs. Bring your own Anthropic API key.
+Document, analyze and query your Salesforce org: impact analysis, plain-English AI explanations and SOQL. Free, no API key needed. (This comes from the package's manifest.json.)
 
 **Category:** Developer Tools
 
@@ -61,8 +61,8 @@ SF Doc Studio helps Salesforce admins and developers understand and work with th
 **Permission justifications:**
 
 - `cookies`: Used only to read the Salesforce session cookie ("sid") on the user's own *.my.salesforce.com domain when they click Connect, so the extension can call the Salesforce API as the already-logged-in user. No other cookies are read, and the value is sent only to that Salesforce org.
-- `sidePanel`: The extension's interface is shown in Chrome's side panel so it stays open next to Salesforce while the user switches tabs. It is opened only when the user clicks the toolbar icon.
-- `storage`: Stores the connected org's URL, the user's optional Anthropic API key, and model preference, and the most recently exported report locally so they do not have to re-enter them each time the popup opens.
+- `sidePanel`: The extension's interface is shown in Chrome's side panel so it stays open next to Salesforce while the user switches tabs. It is opened only when the user clicks the toolbar icon or the extension's button on a Salesforce page.
+- `storage`: Stores the connected org's URL, the user's optional Anthropic API key, and model preference, and the most recently exported report locally so they do not have to re-enter them each time the panel opens.
 - Host permission `https://*.salesforce.com/*`: Required to read the session cookie described above and to call the Salesforce REST and Tooling APIs on the user's own org domain (for example acme.my.salesforce.com): to read object, field and automation metadata, to run the user's own queries, and to apply data changes the user previews and confirms in the Query Editor. The subdomain differs for every customer, so a wildcard is needed.
 - Content script on `https://*.lightning.force.com/*`, `https://*.my.salesforce.com/*`, `https://*.my.salesforce-setup.com/*`: Adds a small button on the edge of Salesforce pages that opens the extension's side panel when clicked. The script does not read or modify page content, and the button can be disabled in Settings.
 - Host permission `https://api.anthropic.com/*`: Used only when the user adds their own Anthropic API key, to send the metadata they choose to analyze to the Anthropic API. By default explanations run on Chrome's built-in on-device AI instead.
@@ -92,4 +92,13 @@ https://github.com/saikumar-cloud/sf-doc-studio/blob/main/PRIVACY.md
 Reviewers cannot sign in without a Salesforce org. Create a free Developer Edition org at developer.salesforce.com/signup, make a dedicated test user, and provide:
 
 - Username / password of the test user
-- A note: "Log in at https://login.salesforce.com with the credentials above in a normal Chrome tab. Then click the extension icon (it opens in the side panel) and click Connect to Salesforce. AI features work without an API key: on supported devices they use Chrome's built-in AI, otherwise each explanation offers a "Copy prompt & open Claude" button."
+- Additional instructions (fits the 500-character limit):
+
+```
+1. Log in at https://login.salesforce.com with the credentials above in a normal Chrome tab.
+2. Click the SF Doc Studio toolbar icon; it opens in the side panel. Click Connect.
+3. Click an object, then a field in the Fields tab, for impact analysis.
+4. Query Editor (main page): ask in plain English or run SOQL. Data changes show a preview and need Confirm.
+5. AI needs no key (Chrome built-in AI or Open in Claude).
+Verification code needed? Email saikumarp167@gmail.com
+```
