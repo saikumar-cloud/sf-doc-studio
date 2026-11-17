@@ -29,18 +29,18 @@ WHAT IT DOES
 
 HOW IT WORKS
 1. Log in to Salesforce in Chrome as usual, then click the extension and press Connect. No extra sign-in, no connected app, no admin setup. Works with production orgs and sandboxes
-2. Add your own Anthropic API key in Settings (get one at console.anthropic.com)
+2. AI explanations are free with no API key: they run on Chrome's built-in on-device AI, or one click opens Claude with the prompt ready. You can optionally add your own Anthropic API key in Settings
 3. Browse objects and click "explain" on anything
 
 PRIVACY
 • Read-only: the extension never changes anything in your org
-• No servers, no analytics, no tracking. Your data goes only to your Salesforce org and, when you click an AI action, to Anthropic using your own API key
+• No servers, no analytics, no tracking. By default AI runs on your own computer; your data goes to Anthropic only if you paste a prompt into Claude or add your own API key
 • Uses the Salesforce login already open in your browser; your session is never stored or sent anywhere except your own org
-• Your API key stays in your browser and can be cleared any time in Settings
+• An optional API key stays in your browser and can be cleared any time in Settings
 
 REQUIREMENTS
 • A Salesforce user with the "API Enabled" permission, logged in to the org in Chrome
-• An Anthropic API key (usage is billed by Anthropic to your account)
+• For free on-device AI: Chrome 138+ on Windows, macOS or Linux with about 22 GB free disk space. Otherwise use the free "Open in Claude" option or your own Anthropic API key
 
 SF Doc Studio is an independent project and is not affiliated with or endorsed by Salesforce, Inc. or Anthropic.
 
@@ -58,10 +58,10 @@ SF Doc Studio documents and analyzes the metadata of a Salesforce org the user c
 
 - `cookies`: Used only to read the Salesforce session cookie ("sid") on the user's own *.my.salesforce.com domain when they click Connect, so the extension can call the Salesforce API as the already-logged-in user. No other cookies are read, and the value is sent only to that Salesforce org.
 - `sidePanel`: The extension's interface is shown in Chrome's side panel so it stays open next to Salesforce while the user switches tabs. It is opened only when the user clicks the toolbar icon.
-- `storage`: Stores the connected org's URL, the user's Anthropic API key, and model preference, and the most recently exported report locally so they do not have to re-enter them each time the popup opens.
+- `storage`: Stores the connected org's URL, the user's optional Anthropic API key, and model preference, and the most recently exported report locally so they do not have to re-enter them each time the popup opens.
 - Host permission `https://*.salesforce.com/*`: Required to read the session cookie described above and to call the Salesforce REST and Tooling APIs on the user's own org domain (for example acme.my.salesforce.com) to read object, field, and automation metadata. The subdomain differs for every customer, so a wildcard is needed.
 - Content script on `https://*.lightning.force.com/*`, `https://*.my.salesforce.com/*`, `https://*.my.salesforce-setup.com/*`: Adds a small button on the edge of Salesforce pages that opens the extension's side panel when clicked. The script does not read or modify page content, and the button can be disabled in Settings.
-- Host permission `https://api.anthropic.com/*`: Required to send the metadata the user chooses to analyze to the Anthropic API, using the user's own API key, to generate explanations.
+- Host permission `https://api.anthropic.com/*`: Used only when the user adds their own Anthropic API key, to send the metadata they choose to analyze to the Anthropic API. By default explanations run on Chrome's built-in on-device AI instead.
 
 **Remote code:** No, I am not using remote code. (All JavaScript is bundled in the package.)
 
@@ -87,4 +87,4 @@ https://github.com/saikumar-cloud/sf-doc-studio/blob/main/PRIVACY.md
 Reviewers cannot sign in without a Salesforce org. Create a free Developer Edition org at developer.salesforce.com/signup, make a dedicated test user, and provide:
 
 - Username / password of the test user
-- A note: "Log in at https://login.salesforce.com with the credentials above in a normal Chrome tab. Then click the extension icon (it opens in the side panel) and click Connect to Salesforce. AI features need an Anthropic API key entered in Settings; browsing objects and impact analysis work without one."
+- A note: "Log in at https://login.salesforce.com with the credentials above in a normal Chrome tab. Then click the extension icon (it opens in the side panel) and click Connect to Salesforce. AI features work without an API key: on supported devices they use Chrome's built-in AI, otherwise each explanation offers a "Copy prompt & open Claude" button."

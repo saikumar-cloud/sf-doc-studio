@@ -13,7 +13,7 @@ AI-powered Salesforce documentation and impact analyzer Chrome extension.
 
 ## Requirements
 - A Salesforce user with the "API Enabled" permission, logged in to the org in Chrome
-- An Anthropic API key (console.anthropic.com)
+- Nothing else: AI explanations are free. They run on Chrome's built-in on-device AI (Chrome 138+ desktop) or, with one click, in your own Claude account. An Anthropic API key is optional
 
 ## Build from source
 1. `git clone https://github.com/saikumar-cloud/sf-doc-studio.git && cd sf-doc-studio`

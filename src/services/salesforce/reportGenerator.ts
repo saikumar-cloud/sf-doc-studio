@@ -1,3 +1,5 @@
+import { markdownToHtml } from '../markdown'
+
 function esc(value: unknown): string {
   return String(value ?? '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -50,7 +52,15 @@ export function generateHtmlReport(
     .content { padding:40px; max-width:1000px; margin:0 auto; }
     .section { margin-bottom:36px; }
     .section h2 { font-size:18px; color:#032d60; border-bottom:2px solid #00a1e0; padding-bottom:8px; margin-bottom:16px; }
-    .ai-box { background:#f0f7ff; border-left:4px solid #00a1e0; padding:20px; border-radius:4px; line-height:1.7; white-space:pre-wrap; font-size:14px; }
+    .ai-box { background:#f0f7ff; border-left:4px solid #00a1e0; padding:20px; border-radius:4px; line-height:1.7; font-size:14px; }
+    .ai-box h3, .ai-box h4, .ai-box h5, .ai-box h6 { color:#032d60; margin:14px 0 6px; font-size:15px; }
+    .ai-box h3:first-child { margin-top:0; }
+    .ai-box p { margin:0 0 8px; }
+    .ai-box pre { background:#fff; border:1px solid #d0d7de; padding:10px; border-radius:4px; font-size:12px; overflow-x:auto; }
+    .ai-box hr { border:none; border-top:1px solid #cfe3f5; margin:12px 0; }
+    .md-li { position:relative; margin:2px 0; }
+    .md-mark { position:absolute; left:0; color:#666; }
+    .note { color:#666; font-size:13px; }
     table { width:100%; border-collapse:collapse; font-size:13px; }
     th { background:#032d60; color:white; padding:10px 12px; text-align:left; }
     td { padding:8px 12px; border-bottom:1px solid #e0e0e0; }
@@ -76,7 +86,7 @@ export function generateHtmlReport(
       '<div class="stat"><div class="stat-val">' + objSummary.layouts.length + '</div><div class="stat-lbl">Layouts</div></div>' +
     '</div>' +
     '<div class="content">' +
-      '<div class="section"><h2>📋 AI Documentation</h2><div class="ai-box">' + esc(aiSummary) + '</div></div>' +
+      (aiSummary ? '<div class="section"><h2>📋 AI Documentation</h2><div class="ai-box">' + markdownToHtml(aiSummary) + '</div></div>' : '<div class="section"><h2>📋 AI Documentation</h2><p class="note">Not included: free on-device AI isn\'t available on this computer. Use "Explain this object with AI" in SF Doc Studio to get it via Claude.</p></div>') +
       '<div class="section"><h2>⚡ Automations & References</h2>' + automationsHtml + '</div>' +
       '<div class="section"><h2>🗂️ Fields (' + fields.length + ')</h2><table><thead><tr><th>Label</th><th>API Name</th><th>Type</th><th>Custom</th></tr></thead><tbody>' + fieldsRows + '</tbody></table>' +
       (fields.length > 100 ? '<p style="color:#999;font-size:11px;margin-top:8px;">Showing 100 of ' + fields.length + ' fields</p>' : '') +

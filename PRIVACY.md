@@ -1,13 +1,13 @@
 # Privacy Policy - SF Doc Studio
 
-Last updated: November 13, 2026
+Last updated: November 17, 2026
 
 SF Doc Studio is a Chrome extension that documents and analyzes the configuration (metadata) of a Salesforce org you connect it to. This policy explains what the extension handles and where it goes.
 
 ## Summary
 
 - The developer of SF Doc Studio does not collect, receive, store, or sell any of your data. There is no SF Doc Studio server, no analytics, and no tracking.
-- The extension talks to only two services: **your Salesforce org** and the **Anthropic API** (using an API key you provide).
+- The extension talks to your **Salesforce org**. AI explanations run on **Chrome's built-in on-device AI** by default, so your metadata stays on your computer. Only if you choose to, they go to **Claude** (by pasting a prompt into your own Claude account) or to the **Anthropic API** (if you add your own API key).
 - The extension is read-only. It never creates, changes, or deletes anything in Salesforce.
 
 ## How sign-in works
@@ -23,7 +23,15 @@ SF Doc Studio does not ask for your Salesforce password. When you click **Connec
 
 The extension reads metadata (how your org is configured). It does not read your business records such as accounts, contacts, or opportunities.
 
-## What is sent to Anthropic
+## Where AI explanations are processed
+
+SF Doc Studio picks one of three ways to answer an AI action:
+
+1. **On-device (default, free).** If your Chrome supports its built-in AI (Gemini Nano), the explanation is generated on your own computer. The metadata is not sent anywhere.
+2. **Open in Claude (free, only when you click it).** If on-device AI is not available, or an item is too long for it, the extension offers a "Copy prompt & open Claude" button. Clicking it copies the prompt to your clipboard and opens claude.ai in a new tab. Nothing is sent unless you paste the prompt into Claude yourself; after that it is handled under your own Claude account and Anthropic's terms.
+3. **Your Anthropic API key (optional).** If you add your own key in Settings, the extension sends the prompt directly to the Anthropic API, as described below.
+
+## What is sent to Anthropic (only options 2 and 3)
 
 When you click an AI action (for example "Explain with AI", "explain" on a component, "Generate Save Sequence", or "Export"), the extension sends the metadata needed for that request to the Anthropic API (`api.anthropic.com`) so the model can write the explanation. Depending on the action this can include:
 
@@ -32,14 +40,14 @@ When you click an AI action (for example "Explain with AI", "explain" on a compo
 - The structure of the Flow you selected
 - The formula and error message of the validation rule you selected
 
-Nothing is sent to Anthropic until you trigger an AI action. Requests are made with **your own Anthropic API key** and are governed by Anthropic's terms and privacy policy (https://www.anthropic.com/legal/privacy). If your organization restricts sharing source code or configuration with third-party AI services, check that policy before using the AI features.
+Nothing is sent to Anthropic unless you paste a prompt into Claude yourself, or have added an API key and trigger an AI action. API requests are made with **your own Anthropic API key** and are governed by Anthropic's terms and privacy policy (https://www.anthropic.com/legal/privacy). If your organization restricts sharing source code or configuration with third-party AI services, check that policy before using the AI features.
 
 ## What is stored on your device
 
 Stored in Chrome's local extension storage (`chrome.storage.local`) on your computer only:
 
 - The URL of the Salesforce org you last connected to
-- Your Anthropic API key
+- Your Anthropic API key, if you add one
 - Your optional model preference and whether the quick access button is shown
 - The most recent report you exported, so the report tab can display it
 
